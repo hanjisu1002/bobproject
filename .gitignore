@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.o
+*.pyd
+*.egg-info/
+.Python
+
+# Virtual Environment
+.venv/
+virtualenv/
+env/
+venv/
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Database
+data/*.db
+
+# Environment variables
+.env
+
+# macOS
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp

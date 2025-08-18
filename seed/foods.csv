@@ -1,0 +1,34 @@
+food_code,food_name,category_name,slug
+5199,갈비탕,국 및 탕류,galbitang
+1007,김밥,밥류,gimbap
+1017,김치볶음밥,밥류,kimchi_bokkeumbap
+6266,김치찌개,찌개 및 전골류,kimchi_jjigae
+10462,닭갈비,볶음류,dakgalbi
+12550,돈가스,튀김류,donkatsu
+6275,된장찌개,찌개 및 전골류,doenjang_jjigae
+10467,떡볶이,볶음류,tteokbokki
+3147,라멘,면 및 만두류,ramen_japanese
+3148,라면,면 및 만두류,ramyeon
+3152,메밀국수,면 및 만두류,soba
+3187,물냉면,면 및 만두류,mul_naengmyeon
+6284,부대찌개,찌개 및 전골류,budae_jjigae
+3192,비빔냉면,면 및 만두류,bibim_naengmyeon
+1018,비빔밥,밥류,bibimbap
+8382,삼겹살,구이류,samgyeopsal
+5228,삼계탕,국 및 탕류,samgyetang
+14640,샐러드,생채·무침류,salad
+5231,설렁탕,국 및 탕류,seolleongtang
+6291,순두부찌개,찌개 및 전골류,sundubu_jjigae
+3161,스파게티,면 및 만두류,spaghetti
+8388,연어구이,구이류,salmon_steak
+9457,오믈렛,전·적 및 부침류,omelette
+3164,우동,면 및 만두류,udon
+10529,제육볶음,볶음류,jeyuk_bokkeum
+7344,족발,찜류,jokbal
+3168,짜장면,면 및 만두류,jjajangmyeon
+12549,치킨,튀김류,chicken
+3174,칼국수,면 및 만두류,kalguksu
+12566,탕수육,튀김류,tangsuyuk
+2120,피자,빵 및 과자류,pizza
+2123,햄버거,빵 및 과자류,hamburger
+8406,훈제오리,구이류,smoked_duck

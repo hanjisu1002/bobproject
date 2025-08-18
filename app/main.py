@@ -1,0 +1,185 @@
+from fastapi import FastAPI
+from app.core.config import settings
+from app.api.routers import health, auth, me, menu, recommend, recognize
+from app.db.session import init_db
+
+app = FastAPI(title=settings.APP_NAME)
+
+@app.on_event("startup")
+def _startup():
+    init_db()
+    print("[DB] Database initialized.")
+
+# 라우터 등록
+app.include_router(health.router, tags=["health"])
+app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["auth"])
+app.include_router(me.router, prefix=f"{settings.API_PREFIX}/me", tags=["me"])
+app.include_router(menu.router, prefix=f"{settings.API_PREFIX}", tags=["menu"])
+app.include_router(recommend.router, prefix=f"{settings.API_PREFIX}", tags=["recommendations"])
+app.include_router(recognize.router, prefix=f"{settings.API_PREFIX}", tags=["recognize"])
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return """
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Personalized Meal API - Quick Test</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; margin: 24px; }
+    h1 { margin: 0 0 8px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+    input, button { padding: 8px 10px; border-radius: 8px; border: 1px solid #e5e7eb; }
+    button { cursor: pointer; }
+    .links a { margin-right: 12px; }
+    pre { background: #0b1020; color: #d1e7ff; padding: 12px; border-radius: 8px; overflow:auto; }
+    small { color: #6b7280; }
+  </style>
+</head>
+<body>
+  <h1>Personalized Meal API – Quick Test</h1>
+  <div class="links">
+    <a href="/docs" target="_blank">Swagger Docs</a>
+    <a href="/redoc" target="_blank">ReDoc</a>
+    <a href="/health" target="_blank">/health</a>
+  </div>
+
+  <div class="card">
+    <h3>1) 인증</h3>
+    <div class="row">
+      <input id="email" placeholder="email" value="test@me.com" />
+      <input id="pw" placeholder="password" type="password" value="pw123" />
+      <button onclick="signup()">/v1/auth/signup</button>
+      <button onclick="login()">/v1/auth/login</button>
+    </div>
+    <div class="row">
+      <input id="token" placeholder="access_token (자동 입력됨)" style="min-width:420px"/>
+      <small>Bearer 토큰은 아래 호출에 자동 포함돼요.</small>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>2) 내 프로필/선호</h3>
+    <div class="row">
+      <button onclick="getProfile()">GET /v1/me/profile</button>
+      <input id="kcal" type="number" placeholder="daily_kcal_goal (예: 2000)"/>
+      <select id="act">
+        <option value="">activity_level</option>
+        <option>low</option><option>mid</option><option>high</option>
+      </select>
+      <button onclick="putProfile()">PUT /v1/me/profile</button>
+    </div>
+    <div class="row">
+      <input id="diet" placeholder='diet_type (vegan/halal/none)'/>
+      <button onclick="getPrefs()">GET /v1/me/preferences</button>
+      <button onclick="putPrefs()">PUT /v1/me/preferences</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>3) 메뉴/영양/검색</h3>
+    <div class="row">
+      <input id="menuId" placeholder="menu_id (food_code)" />
+      <button onclick="getMenu()">GET /v1/menu/{id}</button>
+      <input id="portion" type="number" placeholder="portion_g (예: 300)" />
+      <button onclick="getNutri()">GET /v1/menu/{id}/nutrition</button>
+    </div>
+    <div class="row">
+      <input id="q" placeholder="search q (예: 김치, bibim)" />
+      <button onclick="searchMenu()">GET /v1/menu/search</button>
+      <input id="k" type="number" placeholder="k (유사메뉴 수)" />
+      <button onclick="similarMenu()">GET /v1/menu/{id}/similar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>4) 개인화 추천</h3>
+    <div class="row">
+      <input id="kmax" type="number" placeholder="kcal_max (예: 700)" />
+      <button onclick="reco()">GET /v1/recommendations</button>
+      <small>추천은 토큰 필요. 먼저 로그인하세요.</small>
+    </div>
+  </div>
+
+  <h3>응답</h3>
+  <pre id="out">{}</pre>
+
+<script>
+async function api(path, opts={}) {
+  const t = document.getElementById('token').value.trim();
+  const headers = Object.assign(
+    {'content-type':'application/json'},
+    t ? {'authorization': 'Bearer ' + t} : {}
+  );
+  const resp = await fetch(path, Object.assign({headers}, opts));
+  const text = await resp.text();
+  try { return {status: resp.status, json: JSON.parse(text)}; }
+  catch { return {status: resp.status, json: text}; }
+}
+function show(x){ document.getElementById('out').textContent = JSON.stringify(x, null, 2); }
+
+async function signup(){
+  const body = { email: document.getElementById('email').value, password: document.getElementById('pw').value };
+  const r = await api('/v1/auth/signup', {method:'POST', body: JSON.stringify(body)});
+  if (r.status < 400 && r.json && r.json.access_token) {
+    document.getElementById('token').value = r.json.access_token;
+  }
+  show(r);
+}
+async function login(){
+  const body = { email: document.getElementById('email').value, password: document.getElementById('pw').value };
+  const r = await api('/v1/auth/login', {method:'POST', body: JSON.stringify(body)});
+  if (r.status < 400 && r.json && r.json.access_token) {
+    document.getElementById('token').value = r.json.access_token;
+  }
+  show(r);
+}
+async function getProfile(){ show(await api('/v1/me/profile')); }
+async function putProfile(){
+  const kcal = document.getElementById('kcal').value;
+  const act  = document.getElementById('act').value || null;
+  const body = {};
+  if (kcal) body.daily_kcal_goal = Number(kcal);
+  if (act) body.activity_level = act;
+  show(await api('/v1/me/profile', {method:'PUT', body: JSON.stringify(body)}));
+}
+async function getPrefs(){ show(await api('/v1/me/preferences')); }
+async function putPrefs(){
+  const diet = document.getElementById('diet').value || null;
+  const body = { diet_type: diet, allergens_exclude: [], like_foods: [], dislike_foods: [], like_countries: [], dislike_countries: [] };
+  show(await api('/v1/me/preferences', {method:'PUT', body: JSON.stringify(body)}));
+}
+async function getMenu(){
+  const id = document.getElementById('menuId').value;
+  show(await api(`/v1/menu/${encodeURIComponent(id)}`));
+}
+async function getNutri(){
+  const id = document.getElementById('menuId').value;
+  const p  = document.getElementById('portion').value;
+  const url = p ? `/v1/menu/${encodeURIComponent(id)}/nutrition?portion_g=${encodeURIComponent(p)}` : `/v1/menu/${encodeURIComponent(id)}/nutrition`;
+  show(await api(url));
+}
+async function searchMenu(){
+  const q = document.getElementById('q').value;
+  show(await api(`/v1/menu/search?q=${encodeURIComponent(q)}`));
+}
+async function similarMenu(){
+  const id = document.getElementById('menuId').value;
+  const k  = document.getElementById('k').value;
+  const url = k ? `/v1/menu/${encodeURIComponent(id)}/similar?k=${encodeURIComponent(k)}` : `/v1/menu/${encodeURIComponent(id)}/similar`;
+  show(await api(url));
+}
+async function reco(){
+  const kmax = document.getElementById('kmax').value;
+  const url = kmax ? `/v1/recommendations?kcal_max=${encodeURIComponent(kmax)}` : `/v1/recommendations`;
+  show(await api(url));
+}
+</script>
+</body>
+</html>
+    """
