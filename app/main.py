@@ -1,13 +1,23 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, recognize
 from app.db.session import init_db
 
 app = FastAPI(title=settings.APP_NAME)
 
+# CORS 설정 추가
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 개발 환경에서는 모든 origin 허용, 프로덕션에서는 특정 도메인만 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 def _startup():
-    init_db()
+    init_db()  # 데이터베이스 초기화 활성화
     print("[DB] Database initialized.")
 
 # 라우터 등록
