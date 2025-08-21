@@ -1,190 +1,136 @@
-import sqlite3, os, pandas as pd, re
+import os
+import sys
+import pandas as pd
+import re
+import logging
 
-BASE = os.path.dirname(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE, "data", "menu.db")
-INIT_SQL = os.path.join(BASE, "init.sql")
+# 프로젝트 루트 경로를 sys.path에 추가
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 기본 위치: repo/seed/*.csv  → 없으면 /mnt/data/*.csv 로 폴백
-FOODS_CSV_CANDIDATES = [
-    os.path.join(BASE, "seed", "foods.csv"),
-    "/mnt/data/foods.csv",
-]
-NUTR_CSV_CANDIDATES = [
-    os.path.join(BASE, "seed", "nutrients.csv"),
-    "/mnt/data/nutrients.csv",
-]
+from sqlalchemy.orm import Session
+from app.db.session import SessionLocal, engine
+from app.models.menu import Menu
+from app.models.nutrition import Nutrition
+from app.models.base import Base
+from app.core.config import settings
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def find_csv(candidates):
     for p in candidates:
         if os.path.exists(p):
             return p
-    raise FileNotFoundError(f"CSV not found: {candidates}")
+    raise FileNotFoundError(f"CSV not found in candidates: {candidates}")
 
 def read_csv(path):
-    # 인코딩 유연 처리
-    for enc in (None, "utf-8-sig", "cp949"):
+    for enc in ("utf-8-sig", "cp949", "utf-8"):
         try:
-            if enc:
-                return pd.read_csv(path, encoding=enc)
-            else:
-                return pd.read_csv(path)
+            return pd.read_csv(path, encoding=enc)
         except Exception:
             continue
-    raise RuntimeError(f"Failed to read CSV: {path}")
+    raise RuntimeError(f"Failed to read CSV with all attempted encodings: {path}")
 
-# ---------- 정규화 유틸 ----------
 def clean_code(x):
-    """food_code를 문자열로 정규화: trim, '5199.0' -> '5199' 등"""
     s = str(x).strip()
-    # float 문자열 방지
-    try:
-        f = float(s)
-        if f.is_integer():
-            return str(int(f))
-        return s
-    except Exception:
-        pass
-    s = re.sub(r"\.0+$", "", s)  # '5199.00' -> '5199'
+    s = re.sub(r"\.0+$", "", s)
     return s
 
-def norm_text(s: str) -> str:
-    if s is None:
-        return ""
-    s = str(s).strip().lower()
-    return re.sub(r"[\s\-/_.]+", "", s)
-
 def to_num(v):
-    """NaN -> None, 그 외 숫자는 float로"""
-    return None if pd.isna(v) else float(v)
+    return None if pd.isna(v) or v == 'N/A' else float(v)
 
-def menu_has_generated_std_name_norm(conn: sqlite3.Connection) -> bool:
-    # menu 테이블 DDL 문자열을 읽어 std_name_norm이 GENERATED인지 탐지
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='menu'"
-    ).fetchone()
-    if not row or not row[0]:
-        return False
-    sql = row[0].lower()
-    # std_name_norm 정의부에 generated 키워드가 있으면 True
-    return bool(re.search(r"std_name_norm[^,]*generated", sql, re.IGNORECASE))
+def init_db(db: Session):
+    """
+    데이터베이스 테이블을 생성합니다.
+    """
+    logger.info("Creating database tables...")
+    Base.metadata.create_all(bind=engine)
+    logger.info("Tables created successfully.")
 
-def main():
-    os.makedirs(os.path.join(BASE, "data"), exist_ok=True)
-
-    foods_path = find_csv(FOODS_CSV_CANDIDATES)
-    nutr_path  = find_csv(NUTR_CSV_CANDIDATES)
+def load_seed_data(db: Session):
+    """
+    CSV 파일로부터 메뉴 및 영양 정보를 읽어 데이터베이스에 적재합니다.
+    """
+    foods_path = find_csv([settings.FOODS_CSV])
+    nutr_path = find_csv([settings.NUTRIENTS_CSV])
 
     df_foods = read_csv(foods_path)
-    df_nutr  = read_csv(nutr_path)
+    df_nutr = read_csv(nutr_path)
 
-    # 컬럼 검증
-    required_food_cols = {"food_code", "food_name", "category_name", "slug"}
-    required_nutr_cols = {"food_code", "energy_kcal", "water_g", "protein_g", "fat_g",
-                          "carb_g", "sugars_g", "fiber_g", "sodium_mg"}
+    # 데이터 정규화
+    df_foods["food_code"] = df_foods["food_code"].map(clean_code)
+    df_foods["slug"] = df_foods["slug"].astype(str).str.strip()
+    df_foods["std_name"] = df_foods["food_name"].astype(str).str.strip()
+    df_foods["category"] = df_foods["category_name"].astype(str).str.strip()
 
-    if not required_food_cols.issubset(set(df_foods.columns)):
-        missing = required_food_cols - set(df_foods.columns)
-        raise ValueError(f"foods.csv missing columns: {missing}")
+    df_nutr["food_code"] = df_nutr["food_code"].map(clean_code)
 
-    if not required_nutr_cols.issubset(set(df_nutr.columns)):
-        missing = required_nutr_cols - set(df_nutr.columns)
-        raise ValueError(f"nutrients.csv missing columns: {missing}")
-
-    # ---------- 데이터 정규화 ----------
-    # foods
-    df_foods["food_code"]     = df_foods["food_code"].map(clean_code)
-    df_foods["slug"]          = df_foods["slug"].astype(str).str.strip()
-    df_foods["food_name"]     = df_foods["food_name"].astype(str).str.strip()
-    df_foods["category_name"] = df_foods["category_name"].astype(str).str.strip()
-    df_foods["std_name_norm"] = df_foods["food_name"].map(norm_text)
-
-    # nutrients
-    df_nutr["food_code"]      = df_nutr["food_code"].map(clean_code)
-
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("PRAGMA foreign_keys = ON;")
-        # 스키마 생성/갱신
-        conn.executescript(open(INIT_SQL, "r", encoding="utf-8").read())
-
-        # std_name_norm이 GENERATED인지 확인
-        std_norm_generated = menu_has_generated_std_name_norm(conn)
-
-        # ---------------- menu 적재 (UPSERT by food_code)
-        if std_norm_generated:
-            # GENERATED이면 std_name_norm을 INSERT 대상에서 제외
-            ins_menu = """
-            INSERT INTO menu (food_code, slug, std_name, category, updated_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(food_code) DO UPDATE SET
-                slug       = excluded.slug,
-                std_name   = excluded.std_name,
-                category   = excluded.category,
-                updated_at = excluded.updated_at;
-            """
-            menu_rows = [
-                (r["food_code"], r["slug"], r["food_name"], r["category_name"])
-                for _, r in df_foods.iterrows()
-            ]
+    # --- Menu 데이터 적재 (Upsert) ---
+    logger.info(f"Upserting {len(df_foods)} rows into 'menu' table...")
+    for _, row in df_foods.iterrows():
+        existing_menu = db.query(Menu).filter(Menu.food_code == row["food_code"]).first()
+        if existing_menu:
+            existing_menu.slug = row["slug"]
+            existing_menu.std_name = row["std_name"]
+            existing_menu.category = row["category"]
         else:
-            # 일반 TEXT 컬럼이면 std_name_norm도 함께 적재
-            ins_menu = """
-            INSERT INTO menu (food_code, slug, std_name, category, std_name_norm, updated_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(food_code) DO UPDATE SET
-                slug         = excluded.slug,
-                std_name     = excluded.std_name,
-                category     = excluded.category,
-                std_name_norm= excluded.std_name_norm,
-                updated_at   = excluded.updated_at;
-            """
-            menu_rows = [
-                (
-                    r["food_code"],
-                    r["slug"],
-                    r["food_name"],
-                    r["category_name"],
-                    r["std_name_norm"],
-                )
-                for _, r in df_foods.iterrows()
-            ]
+            new_menu = Menu(
+                food_code=row["food_code"],
+                slug=row["slug"],
+                std_name=row["std_name"],
+                category=row["category"],
+            )
+            db.add(new_menu)
+    db.commit()
+    logger.info("Menu data upserted.")
 
-        conn.executemany(ins_menu, menu_rows)
+    # --- Nutrition 데이터 적재 ---
+    # 먼저 기존 Nutrition 데이터 모두 삭제 (중복 방지)
+    logger.info("Deleting existing nutrition data...")
+    db.query(Nutrition).delete()
+    db.commit()
 
-        # ---------------- nutrition 적재
-        ins_nutr = """
-        INSERT INTO nutrition
-          (food_code, energy_kcal, water_g, protein_g, fat_g, carb_g, sugars_g, fiber_g, sodium_mg, created_at)
-        VALUES (?,?,?,?,?,?,?,?,?, datetime('now'));
-        """
+    existing_codes = {m.food_code for m in db.query(Menu.food_code).all()}
+    
+    nutr_to_add = []
+    skipped_count = 0
+    logger.info(f"Inserting {len(df_nutr)} rows into 'nutrition' table...")
+    for _, row in df_nutr.iterrows():
+        if row["food_code"] not in existing_codes:
+            skipped_count += 1
+            continue
+        
+        nutr_to_add.append(
+            Nutrition(
+                food_code=row["food_code"],
+                energy_kcal=to_num(row.get("energy_kcal")),
+                water_g=to_num(row.get("water_g")),
+                protein_g=to_num(row.get("protein_g")),
+                fat_g=to_num(row.get("fat_g")),
+                carb_g=to_num(row.get("carb_g")),
+                sugars_g=to_num(row.get("sugars_g")),
+                fiber_g=to_num(row.get("fiber_g")),
+                sodium_mg=to_num(row.get("sodium_mg")),
+            )
+        )
 
-        # FK 대상 존재 여부 확인
-        existing_codes = {row[0] for row in conn.execute("SELECT food_code FROM menu").fetchall()}
+    if nutr_to_add:
+        db.bulk_save_objects(nutr_to_add)
+        db.commit()
 
-        nutr_rows, skipped = [], 0
-        for _, r in df_nutr.iterrows():
-            fc = r["food_code"]
-            if fc not in existing_codes:
-                skipped += 1
-                continue
-            nutr_rows.append((
-                fc,
-                to_num(r.get("energy_kcal")),
-                to_num(r.get("water_g")),
-                to_num(r.get("protein_g")),
-                to_num(r.get("fat_g")),
-                to_num(r.get("carb_g")),
-                to_num(r.get("sugars_g")),
-                to_num(r.get("fiber_g")),
-                to_num(r.get("sodium_mg")),
-            ))
-        if nutr_rows:
-            conn.executemany(ins_nutr, nutr_rows)
+    logger.info("✅ Seed data loaded successfully!")
+    logger.info(f"  - Menu rows upserted: {len(df_foods)}")
+    logger.info(f"  - Nutrition rows inserted: {len(nutr_to_add)} (skipped {skipped_count} rows lacking a corresponding menu entry)")
 
-        conn.commit()
-
-    print("✅ Loaded seed data with normalization")
-    print(f"  - menu rows upserted: {len(menu_rows)}")
-    print(f"  - nutrition rows inserted: {len(nutr_rows)} (skipped {skipped} rows lacking menu)")
 
 if __name__ == "__main__":
-    main()
+    db = SessionLocal()
+    try:
+        # 1. (선택) DB 테이블 초기화
+        # init_db(db)
+        
+        # 2. 시드 데이터 적재
+        load_seed_data(db)
+    finally:
+        db.close()
