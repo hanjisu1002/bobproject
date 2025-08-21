@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     NUTRIENTS_CSV: str = "seed/nutrients.csv"
     
     # 🔹 Database
-    DB_URL: str = "sqlite:///./data/menu.db"
-
+    # PostgreSQL for production (Render)
+    DATABASE_URL: str = "postgresql://smartbite_user:06WMuWM221m8uikEmZ7F3Y1jcDT2eVF7@dpg-d2j9eendiees73bupsm0-a.singapore-postgres.render.com/smartbite"
+    
+    # 🔹 CORS Settings
+    ALLOWED_ORIGINS: str = "https://bobproject.vercel.app,http://localhost:3000,http://localhost:19006"
 
     class Config:
         env_file = ".env"

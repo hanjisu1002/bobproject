@@ -11,10 +11,10 @@ class User(Base):
     password_hash = Column(Text, nullable=False)
     created_at = Column(DateTime, default=func.now())
 
-    sessions = relationship("Session", back_populates="user")
-    profile = relationship("UserProfile", back_populates="user", uselist=False)
-    preferences = relationship("UserPreferences", back_populates="user", uselist=False)
-    history = relationship("UserHistory", back_populates="user")
+    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    history = relationship("UserHistory", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(email='{self.email}')>"

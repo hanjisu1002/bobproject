@@ -1,16 +1,56 @@
+from __future__ import annotations
+
+import os
+import logging
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, recognize
 from app.db.session import init_db
 
+# 로깅 기본 설정 (원하면 settings로 조절)
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+log = logging.getLogger("app")
+
+# Render가 주는 포트 (로컬 기본 8000)
+PORT = int(os.environ.get("PORT", 8000))
+
 app = FastAPI(title=settings.APP_NAME)
 
+# ---------------------------
+# CORS
+# ---------------------------
+# settings.ALLOWED_ORIGINS = "https://front.vercel.app,https://mydomain.com" 형태 권장
+if settings.ALLOWED_ORIGINS:
+    origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+else:
+    # 운영에선 특정 도메인만 허용하는 것을 권장
+    origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
+)
+
+# ---------------------------
+# 스타트업: DB 초기화 (재시도 포함)
+# ---------------------------
 @app.on_event("startup")
 def _startup():
-    init_db()
-    print("[DB] Database initialized.")
+    init_db()  # 실패해도 앱은 뜬다 (로그 확인)
+    log.info(f"[Startup] API is starting on port {PORT} with origins={origins}")
 
-# 라우터 등록
+
+# ---------------------------
+# 라우터
+# ---------------------------
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["auth"])
 app.include_router(me.router, prefix=f"{settings.API_PREFIX}/me", tags=["me"])
@@ -18,6 +58,9 @@ app.include_router(menu.router, prefix=f"{settings.API_PREFIX}", tags=["menu"])
 app.include_router(recommend.router, prefix=f"{settings.API_PREFIX}", tags=["recommendations"])
 app.include_router(recognize.router, prefix=f"{settings.API_PREFIX}", tags=["recognize"])
 
+# ---------------------------
+# 간단한 루트 페이지
+# ---------------------------
 from fastapi.responses import HTMLResponse
 
 @app.get("/", response_class=HTMLResponse)
@@ -183,3 +226,8 @@ async function reco(){
 </body>
 </html>
     """
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
+
