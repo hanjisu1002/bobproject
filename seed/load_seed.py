@@ -128,7 +128,7 @@ if __name__ == "__main__":
     db = SessionLocal()
     try:
         # 1. (선택) DB 테이블 초기화
-        init_db(db)
+        # init_db(db)
         
         # 2. 시드 데이터 적재
         load_seed_data(db)

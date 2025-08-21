@@ -1,24 +1,30 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, recognize
 from app.db.session import init_db
 
+# 포트 설정 (Render 환경변수 또는 기본값)
+PORT = int(os.environ.get("PORT", 8000))
+
 app = FastAPI(title=settings.APP_NAME)
 
 # CORS 설정 추가
+origins = settings.ALLOWED_ORIGINS.split(",") if settings.ALLOWED_ORIGINS else []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 환경에서는 모든 origin 허용, 프로덕션에서는 특정 도메인만 허용
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 @app.on_event("startup")
 def _startup():
     init_db()  # 데이터베이스 초기화 활성화
-    print("[DB] Database initialized.")
+    print(f"[DB] Database initialized on port {PORT}.")
 
 # 라우터 등록
 app.include_router(health.router, tags=["health"])
@@ -193,3 +199,8 @@ async function reco(){
 </body>
 </html>
     """
+
+# 개발 환경에서 직접 실행할 때 사용
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

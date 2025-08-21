@@ -1,13 +1,14 @@
 import axios from 'axios';
 
 // 기존 백엔드 API 설정
-const API_BASE_URL = 'http://localhost:8000/v1';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,  // 쿠키 포함 (CORS credentials)
 });
 
 // 요청 인터셉터: 토큰 자동 추가
