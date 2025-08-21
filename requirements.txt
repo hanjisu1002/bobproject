@@ -5,7 +5,7 @@ sqlalchemy==2.0.32
 python-multipart==0.0.9
 pandas
 pydantic-settings
-passlib
+passlib[bcrypt]>=1.7.4
 PyJWT
 bcrypt
 psycopg2-binary
