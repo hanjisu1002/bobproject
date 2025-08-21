@@ -47,7 +47,7 @@ def _normalize_postgres_url(raw: str) -> str:
 # ---------------------------------------------------------------------
 # DB URL 로드
 # ---------------------------------------------------------------------
-SQLALCHEMY_DATABASE_URL = settings.DB_URL.strip()
+SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL.strip()
 
 IS_SQLITE = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
 

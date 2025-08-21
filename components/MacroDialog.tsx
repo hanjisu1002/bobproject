@@ -1,5 +1,5 @@
 // components/MacroDialog.tsx
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { Button, Dialog, Portal, Text, TextInput } from "react-native-paper";
 import { palette } from "../theme";
@@ -13,24 +13,57 @@ type Props = {
 };
 
 export default function MacroDialog({ open, initial, onClose, onSave }: Props) {
-  const [carb, setCarb] = useState(initial.carb ?? 50);
-  const [protein, setProtein] = useState(initial.protein ?? 25);
+  // 초기값: 합계 100에 가깝도록 보정
+  const [carb, setCarb] = useState<number>(Math.round(initial.carb ?? 50));
+  const [protein, setProtein] = useState<number>(Math.round(initial.protein ?? 25));
+  const [fat, setFat] = useState<number>(
+    Math.max(0, 100 - Math.round(initial.carb ?? 50) - Math.round(initial.protein ?? 25))
+  );
 
-  // initial 값이 변경될 때마다 상태 업데이트
-  useEffect(() => {
-    if (open) {
-      setCarb(initial.carb ?? 50);
-      setProtein(initial.protein ?? 25);
+  const total = useMemo(() => Math.round(carb + protein + fat), [carb, protein, fat]);
+  const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+
+  // 하나를 바꿀 때 합계=100 유지 로직 -----------------------------
+  const updateCarb = (v: number) => {
+    let c = clamp(v), p = protein, f = fat;
+    const overflow = c + p + f - 100;
+    if (overflow > 0) {
+      // 지방부터 줄이고, 모자라면 단백질도 줄임
+      const reduceFat = Math.min(f, overflow);
+      f -= reduceFat;
+      const still = overflow - reduceFat;
+      if (still > 0) p = Math.max(0, p - still);
     }
-  }, [open, initial]);
+    setCarb(c); setProtein(clamp(p)); setFat(clamp(f));
+  };
 
-  // 합계 100% 유지
-  const fat = useMemo(() => {
-    const rest = 100 - Math.round(carb) - Math.round(protein);
-    return Math.max(0, rest);
-  }, [carb, protein]);
+  const updateProtein = (v: number) => {
+    let p = clamp(v), c = carb, f = fat;
+    const overflow = c + p + f - 100;
+    if (overflow > 0) {
+      const reduceFat = Math.min(f, overflow);
+      f -= reduceFat;
+      const still = overflow - reduceFat;
+      if (still > 0) c = Math.max(0, c - still);
+    }
+    setProtein(p); setCarb(clamp(c)); setFat(clamp(f));
+  };
 
-  const save = () => onSave({ carb: Math.round(carb), protein: Math.round(protein), fat });
+  const updateFat = (v: number) => {
+    let f = clamp(v), c = carb, p = protein;
+    const overflow = c + p + f - 100;
+    if (overflow > 0) {
+      // 탄수화물부터 줄이고 모자라면 단백질도 줄임(반대로 하고 싶으면 순서만 바꾸세요)
+      const reduceCarb = Math.min(c, overflow);
+      c -= reduceCarb;
+      const still = overflow - reduceCarb;
+      if (still > 0) p = Math.max(0, p - still);
+    }
+    setFat(f); setCarb(clamp(c)); setProtein(clamp(p));
+  };
+  // -------------------------------------------------------------
+
+  const save = () => onSave({ carb: clamp(carb), protein: clamp(protein), fat: clamp(fat) });
 
   return (
     <Portal>
@@ -40,39 +73,39 @@ export default function MacroDialog({ open, initial, onClose, onSave }: Props) {
             탄수화물 · 단백질 · 지방 비율 (합계 100%)
           </Text>
 
-          <Row label={`탄수화물 ${Math.round(carb)}%`}>
+          <Row label={`탄수화물 ${carb}%`}>
             <TextInput
               value={String(carb)}
-              onChangeText={(text) => {
-                const value = parseInt(text) || 0;
-                if (value >= 10 && value <= 80) {
-                  setCarb(value);
-                }
-              }}
+              onChangeText={(text) => updateCarb(Number(text) || 0)}
               keyboardType="numeric"
-              style={{ backgroundColor: palette.bg }}
               mode="outlined"
-              dense
+              style={{ marginBottom: 8 }}
             />
           </Row>
 
-          <Row label={`단백질 ${Math.round(protein)}%`}>
+          <Row label={`단백질 ${protein}%`}>
             <TextInput
               value={String(protein)}
-              onChangeText={(text) => {
-                const value = parseInt(text) || 0;
-                if (value >= 10 && value <= 80) {
-                  setProtein(value);
-                }
-              }}
+              onChangeText={(text) => updateProtein(Number(text) || 0)}
               keyboardType="numeric"
-              style={{ backgroundColor: palette.bg }}
               mode="outlined"
-              dense
+              style={{ marginBottom: 8 }}
             />
           </Row>
 
-          <Text style={{ marginTop: 4, fontSize: 16 }}>지방 {fat}%</Text>
+          <Row label={`지방 ${fat}%`}>
+            <TextInput
+              value={String(fat)}
+              onChangeText={(text) => updateFat(Number(text) || 0)}
+              keyboardType="numeric"
+              mode="outlined"
+              style={{ marginBottom: 8 }}
+            />
+          </Row>
+
+          <Text style={{ marginTop: 4, fontSize: 14, textAlign: "right", opacity: 0.7 }}>
+            합계 {total}%
+          </Text>
         </Dialog.Content>
 
         <Dialog.Actions>
@@ -88,7 +121,7 @@ export default function MacroDialog({ open, initial, onClose, onSave }: Props) {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <View style={{ marginBottom: 12 }}>
+    <View style={{ marginBottom: 14 }}>
       <Text style={{ marginBottom: 6, fontWeight: "700" }}>{label}</Text>
       {children}
     </View>
