@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     NUTRIENTS_CSV: str = "seed/nutrients.csv"
     
     # 🔹 Database
-    DB_URL: str = "sqlite:///./data/menu.db"
+    # DB_URL: str = "sqlite:///./data/menu.db"
+    DB_URL: str = "postgresql://user:password@host:port/dbname"  # PostgreSQL default
 
 
     class Config:

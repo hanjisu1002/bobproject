@@ -8,3 +8,4 @@ pydantic-settings
 passlib
 PyJWT
 bcrypt
+psycopg2-binary
