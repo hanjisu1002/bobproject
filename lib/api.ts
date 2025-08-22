@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { loadJSON } from './storage'; // loadJSON import 추가
 
 // 기존 백엔드 API 설정
 const API_BASE_URL = 'https://bobproject-server.onrender.com/v1';
@@ -12,8 +13,11 @@ const api = axios.create({
 });
 
 // 요청 인터셉터: 토큰 자동 추가
-api.interceptors.request.use((config) => {
-  // AsyncStorage에서 토큰을 가져오는 로직은 나중에 구현
+api.interceptors.request.use(async (config) => {
+  const token = await loadJSON<string | null>("token", null); // 토큰 로드
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 

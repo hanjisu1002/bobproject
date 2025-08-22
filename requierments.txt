@@ -20,6 +20,18 @@ npm i react-native-paper
 # 캘린더(기록 탭)
 npm i react-native-calendars
 
+# backend
+fastapi==0.111.0
+uvicorn==0.30.1
+pydantic==2.8.2
+sqlalchemy==2.0.32
+python-multipart==0.0.9
+pandas
+pydantic-settings
+passlib[bcrypt]>=1.7.4
+PyJWT
+psycopg2-binary
+
 # Core
 numpy>=1.24,<2.1
 pillow>=10.3.0
