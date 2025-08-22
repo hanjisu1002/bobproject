@@ -1,17 +1,17 @@
+// app/(tabs)/index.tsx
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  ImageBackground,
-  Pressable,
+  RefreshControl,
   View,
 } from "react-native";
 import { Card, Chip, Text } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { loadJSON } from "../../lib/storage";
+import { recommendAPI } from "../../lib/api";
 import { palette, radius, space } from "../../theme";
-import { menuAPI } from "../../lib/api";
 
 const W = Dimensions.get("window").width;
 
@@ -19,86 +19,54 @@ type Profile = {
   targetKcal?: number;
   macro?: { carb: number; protein: number; fat: number };
   prefers?: string[];
+  allergens?: string[];
 };
 
 type MenuItem = {
   id: string;
   name: string;
-  photo: string; // 이미지 URL(데모)
-  kcal: number;
-  macro: { carb: number; protein: number; fat: number }; // %
-  category: "한식" | "일식" | "양식" | "샐러드" | "면" | "덮밥";
+  kcal: number; // 표시용 kcal (없으면 0)
+  macro: { carb: number; protein: number; fat: number }; // % (nutrition가 없으면 폴백)
+  category: "한식" | "일식" | "양식" | "샐러드" | "면" | "덮밥" | string;
 };
 
-// ─────────────────────────────────────────────────────
-// 데모용 데이터 (나중에 DB 연동 시 이 부분만 API 호출로 교체)
-const MOCK: MenuItem[] = [
-  {
-    id: "1",
-    name: "연어 포케",
-    photo:
-      "https://images.unsplash.com/photo-1552749412-5b94f5b1b8ab?q=80&w=1600&auto=format&fit=crop",
-    kcal: 540,
-    macro: { carb: 45, protein: 30, fat: 25 },
-    category: "덮밥",
-  },
-  {
-    id: "2",
-    name: "치킨 샐러드",
-    photo:
-      "https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop",
-    kcal: 420,
-    macro: { carb: 30, protein: 40, fat: 30 },
-    category: "샐러드",
-  },
-  {
-    id: "3",
-    name: "메밀 소바",
-    photo:
-      "https://images.unsplash.com/photo-1604908176997-431ca5c4a70e?q=80&w=1600&auto=format&fit=crop",
-    kcal: 560,
-    macro: { carb: 60, protein: 20, fat: 20 },
-    category: "면",
-  },
-  {
-    id: "4",
-    name: "두부 스테이크 정식",
-    photo:
-      "https://images.unsplash.com/photo-1488477181946-6428a0291777?q=80&w=1600&auto=format&fit=crop",
-    kcal: 500,
-    macro: { carb: 40, protein: 35, fat: 25 },
-    category: "한식",
-  },
-  {
-    id: "5",
-    name: "연어 스테이크",
-    photo:
-      "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1600&auto=format&fit=crop",
-    kcal: 580,
-    macro: { carb: 25, protein: 45, fat: 30 },
-    category: "양식",
-  },
-  {
-    id: "6",
-    name: "사시미 덮밥",
-    photo:
-      "https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1600&auto=format&fit=crop",
-    kcal: 620,
-    macro: { carb: 50, protein: 30, fat: 20 },
-    category: "일식",
-  },
-];
-
+// 카테고리 칩
 const CATS = ["전체", "한식", "일식", "양식", "샐러드", "면", "덮밥"] as const;
-// ─────────────────────────────────────────────────────
+
+// nutrition 그램 → %로 환산
+function macroPercentFromGrams(n?: {
+  carb_g?: number | null;
+  protein_g?: number | null;
+  fat_g?: number | null;
+}) {
+  const cg = Number(n?.carb_g ?? 0);
+  const pg = Number(n?.protein_g ?? 0);
+  const fg = Number(n?.fat_g ?? 0);
+
+  const cKcal = cg * 4;
+  const pKcal = pg * 4;
+  const fKcal = fg * 9;
+  const total = cKcal + pKcal + fKcal;
+
+  if (total <= 0) return { carb: 50, protein: 25, fat: 25 }; // 폴백
+
+  const carb = Math.round((cKcal / total) * 100);
+  const protein = Math.round((pKcal / total) * 100);
+  let fat = 100 - carb - protein; // 합 100 보정
+  if (fat < 0) fat = 0;
+  return { carb, protein, fat };
+}
 
 export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [cat, setCat] = useState<(typeof CATS)[number]>("전체");
   const [loading, setLoading] = useState(true);
-  const [searchResults, setSearchResults] = useState<MenuItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
+  // ✅ 실제 추천 결과
+  const [items, setItems] = useState<MenuItem[]>([]);
+
+  // 프로필 로드
   useEffect(() => {
     (async () => {
       const p = await loadJSON<Profile | null>("profile", null);
@@ -107,47 +75,72 @@ export default function Home() {
     })();
   }, []);
 
-  // 백엔드 API로 메뉴 검색
-  const searchMenu = async (query: string) => {
-    if (!query.trim()) return;
-    
-    try {
-      const response = await menuAPI.searchMenu(query);
-      console.log('Search results:', response.data);
-      
-      // 백엔드 응답을 MenuItem 형식으로 변환
-      const results = response.data?.map((item: any, index: number) => ({
-        id: item.food_code || String(index + 1),
-        name: item.food_name || item.name,
-        photo: MOCK[index % MOCK.length]?.photo || "https://via.placeholder.com/300x200",
-        kcal: item.kcal || 500,
-        macro: { carb: 50, protein: 25, fat: 25 }, // 기본값
-        category: item.category || "한식",
-      })) || [];
-      
-      setSearchResults(results);
-    } catch (error) {
-      console.error('메뉴 검색 실패:', error);
-      // 에러 시 데모 데이터 사용
-      setSearchResults(MOCK);
-    }
-  };
+  // ✅ 추천 불러오기 (백엔드: GET /v1/recommendations)
+  const fetchRecommendations = useCallback(
+    async (category?: string) => {
+      try {
+        // kcal_max로 목표 칼로리를 대략 반영 (없으면 미전달)
+        const kcalMax =
+          typeof profile?.targetKcal === "number" && profile.targetKcal > 0
+            ? Math.round(profile.targetKcal)
+            : undefined;
 
+        const res = await recommendAPI.getRecommendations(kcalMax);
+
+        // 서버 스키마: { items: [{ menu, nutrition, score }] }
+        const mapped: MenuItem[] = (res?.data?.items ?? []).map((it: any, i: number) => {
+          const m = it.menu ?? {};
+          const n = it.nutrition ?? {};
+          const macroPct = macroPercentFromGrams({
+            carb_g: n.carb_g,
+            protein_g: n.protein_g,
+            fat_g: n.fat_g,
+          });
+
+          return {
+            id: String(m.menu_id ?? m.food_code ?? i + 1),
+            name: m.std_name ?? "이름 없음",
+            kcal: Math.round(Number(n.energy_kcal ?? 0)),
+            macro: macroPct,
+            category: (m.category ?? "한식") as MenuItem["category"],
+          };
+        });
+
+        // 카테고리 필터(클라이언트)
+        const filtered =
+          category && category !== "전체"
+            ? mapped.filter((x) => x.category === category)
+            : mapped;
+
+        setItems(filtered);
+      } catch (e) {
+        console.error("오늘의 추천 불러오기 실패:", e);
+        setItems([]); // 실패 시 빈 리스트
+      }
+    },
+    [profile]
+  );
+
+  // 첫 로드/카테고리 변경 시
+  useEffect(() => {
+    if (!loading) fetchRecommendations(cat);
+  }, [loading, cat, fetchRecommendations]);
+
+  // 당겨서 새로고침
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchRecommendations(cat);
+    setRefreshing(false);
+  }, [fetchRecommendations, cat]);
+
+  // 선호 카테고리 약한 정렬
   const data = useMemo(() => {
-    let arr = [...MOCK];
-    // 선호 카테고리를 약하게 반영(상단으로 정렬)
     const prefers = profile?.prefers ?? [];
-    if (prefers.length) {
-      arr.sort((a, b) => {
-        const pa = prefers.includes(a.category);
-        const pb = prefers.includes(b.category);
-        return Number(pb) - Number(pa);
-      });
-    }
-    // 카테고리 필터
-    if (cat !== "전체") arr = arr.filter((m) => m.category === cat);
-    return arr;
-  }, [cat, profile]);
+    if (!items.length || !prefers.length) return items;
+    const copy = [...items];
+    copy.sort((a, b) => Number(prefers.includes(b.category)) - Number(prefers.includes(a.category)));
+    return copy;
+  }, [items, profile]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
@@ -174,7 +167,7 @@ export default function Home() {
         </LinearGradient>
       </View>
 
-      {/* 카테고리 필터 */}
+      {/* 카테고리 칩 */}
       <View
         style={{
           paddingHorizontal: space(2),
@@ -201,23 +194,13 @@ export default function Home() {
         ))}
       </View>
 
-      {/* 리스트 */}
+      {/* 리스트 (이미지 없음: 텍스트만) */}
       {loading ? (
         <View style={{ padding: space(2), gap: 12 }}>
           {[...Array(4)].map((_, i) => (
-            <Card key={i} style={{ borderRadius: radius.lg }}>
-              <View
-                style={{
-                  height: 160,
-                  backgroundColor: "#E5E7EB",
-                  borderTopLeftRadius: radius.lg,
-                  borderTopRightRadius: radius.lg,
-                }}
-              />
-              <View style={{ padding: 12, gap: 6 }}>
-                <View style={{ height: 16, backgroundColor: "#E5E7EB", borderRadius: 6 }} />
-                <View style={{ height: 12, backgroundColor: "#E5E7EB", borderRadius: 6, width: "60%" }} />
-              </View>
+            <Card key={i} style={{ borderRadius: radius.lg, padding: 14 }}>
+              <View style={{ height: 18, backgroundColor: "#E5E7EB", borderRadius: 6, width: "60%", marginBottom: 8 }} />
+              <View style={{ height: 12, backgroundColor: "#E5E7EB", borderRadius: 6, width: "40%" }} />
             </Card>
           ))}
         </View>
@@ -228,124 +211,26 @@ export default function Home() {
           contentContainerStyle={{
             paddingHorizontal: space(2),
             paddingVertical: space(2),
-            gap: 14,
+            gap: 12,
             paddingBottom: 24,
           }}
-          renderItem={({ item }) => <MenuCard item={item} profile={profile} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          renderItem={({ item }) => (
+            <Card style={{ borderRadius: radius.lg, padding: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: "#111827" }}>
+                {item.name}
+              </Text>
+              <Text style={{ color: "#4B5563", marginTop: 4 }}>
+                {item.category} • {item.kcal ? `${item.kcal} kcal` : "영양정보 없음"}
+              </Text>
+              <Text style={{ color: "#6B7280", marginTop: 2, fontSize: 12 }}>
+                C {item.macro.carb}% · P {item.macro.protein}% · F {item.macro.fat}%
+              </Text>
+            </Card>
+          )}
           showsVerticalScrollIndicator={false}
         />
       )}
     </SafeAreaView>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// 카드 + 매크로바
-function MenuCard({ item, profile }: { item: MenuItem; profile: Profile | null }) {
-  const width = W - space(2) * 2;
-
-  return (
-    <Pressable
-      onPress={() => {}}
-      style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
-    >
-      <Card style={{ borderRadius: radius.lg, overflow: "hidden" }}>
-        <ImageBackground
-          source={{ uri: item.photo }}
-          style={{ width: "100%", height: 180, justifyContent: "flex-end" }}
-          imageStyle={{ resizeMode: "cover" }}
-        >
-          {/* 상단 라벨 */}
-          <View
-            style={{
-              position: "absolute",
-              top: 10,
-              left: 10,
-              backgroundColor: "rgba(0,0,0,0.45)",
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 999,
-            }}
-          >
-            <Text style={{ color: "white", fontWeight: "700" }}>
-              {item.kcal} kcal
-            </Text>
-          </View>
-
-          {/* 하단 그라데이션 블러 */}
-          <LinearGradient
-            colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
-            style={{ width: "100%", padding: 12 }}
-          >
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "800" }}>
-              {item.name}
-            </Text>
-            <Text style={{ color: "white", opacity: 0.9, marginTop: 2 }}>
-              {item.category} • C {item.macro.carb}% · P {item.macro.protein}% · F {item.macro.fat}%
-            </Text>
-          </LinearGradient>
-        </ImageBackground>
-
-        {/* 본문: 간단 매크로 바 + 버튼 행 */}
-        <View style={{ padding: 12, gap: 10 }}>
-          <MacroBar macro={item.macro} target={profile?.macro} width={width - 24} />
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Chip compact style={{ backgroundColor: "#EEF2FF" }} textStyle={{ color: "#4338CA" }}>
-              깔끔한 맛
-            </Chip>
-            <Chip compact style={{ backgroundColor: "#ECFDF5" }} textStyle={{ color: "#065F46" }}>
-              단백질 +
-            </Chip>
-          </View>
-        </View>
-      </Card>
-    </Pressable>
-  );
-}
-
-function MacroBar({
-  macro,
-  target,
-  width,
-}: {
-  macro: { carb: number; protein: number; fat: number };
-  target?: { carb: number; protein: number; fat: number };
-  width: number;
-}) {
-  // 실제 비율 (합 100 기준으로 들어온다고 가정)
-  const c = macro.carb;
-  const p = macro.protein;
-  const f = macro.fat;
-
-  return (
-    <View style={{ gap: 6 }}>
-      {/* 색 막대 */}
-      <View
-        style={{
-          width,
-          height: 10,
-          borderRadius: 999,
-          overflow: "hidden",
-          backgroundColor: "#E5E7EB",
-          flexDirection: "row",
-        }}
-      >
-        <View style={{ width: `${c}%`, backgroundColor: "#60A5FA" }} />
-        <View style={{ width: `${p}%`, backgroundColor: "#34D399" }} />
-        <View style={{ width: `${f}%`, backgroundColor: "#F59E0B" }} />
-      </View>
-      {/* 라벨 */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ color: "#374151" }}>탄수화물 {c}%</Text>
-        <Text style={{ color: "#374151" }}>단백질 {p}%</Text>
-        <Text style={{ color: "#374151" }}>지방 {f}%</Text>
-      </View>
-      {/* 목표가 있으면 작은 가이드 텍스트 */}
-      {target && (
-        <Text style={{ color: "#6B7280", fontSize: 12 }}>
-          목표 C{target.carb}/P{target.protein}/F{target.fat} 대비 추천
-        </Text>
-      )}
-    </View>
   );
 }
