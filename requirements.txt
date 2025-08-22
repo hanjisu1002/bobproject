@@ -43,7 +43,7 @@ onnxruntime>=1.18.0
 ultralytics>=8.2.0
 
 # Torch & CLIP (CPU 전용으로 설치됨, GPU 쓰려면 따로 wheel 설치 권장)
-torch>=2.2,<2.5
+torch==2.3.1
 open-clip-torch>=2.24.0
 huggingface_hub>=0.23.0
 safetensors>=0.4.2
