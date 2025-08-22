@@ -31,3 +31,19 @@ pydantic-settings
 passlib[bcrypt]>=1.7.4
 PyJWT
 psycopg2-binary
+
+# Core
+numpy>=1.24,<2.1
+pillow>=10.3.0
+
+# ONNX Runtime (CPU 전용)
+onnxruntime>=1.18.0
+
+# YOLOv8 (ONNX 추론 지원 포함)
+ultralytics>=8.2.0
+
+# Torch & CLIP (CPU 전용으로 설치됨, GPU 쓰려면 따로 wheel 설치 권장)
+torch>=2.2,<2.5
+open-clip-torch>=2.24.0
+huggingface_hub>=0.23.0
+safetensors>=0.4.2
