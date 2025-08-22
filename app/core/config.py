@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     )
 
     # CORS
-    # 문자열(.env)에 콤마로 넣어도 되고, 코드에서 list로 바꿔 쓸 거면 split해서 사용
+    # 개발 편의를 위해 모든 Origin 허용 (운영 환경에서는 특정 도메인만 허용 권장)
     ALLOWED_ORIGINS: str = "https://bobproject.vercel.app,http://localhost:3000,http://localhost:19006"
 
 settings = Settings()

@@ -88,3 +88,14 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_user_ts ON feedback(user_id, ts);
 CREATE INDEX IF NOT EXISTS idx_feedback_reco_id ON feedback(reco_id);
+
+-- 9) 사용자 음식 기록
+CREATE TABLE IF NOT EXISTS user_food_log (
+  id           SERIAL PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES "user"(user_id) ON DELETE CASCADE,
+  menu_id      INTEGER NOT NULL REFERENCES menu(menu_id) ON DELETE CASCADE,
+  portion_g    REAL NOT NULL,
+  meal_type    TEXT,
+  consumed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_food_log_user_consumed_at ON user_food_log(user_id, consumed_at);

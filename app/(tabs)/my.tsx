@@ -13,7 +13,7 @@ import RingProgress from "../../components/RingProgress";
 import TargetKcalDialog from "../../components/TargetKcalDialog";
 
 import { getTodaySummary } from "../../lib/records";
-import { loadJSON, saveJSON } from "../../lib/storage";
+import { loadJSON, saveJSON, clearAuthData } from "../../lib/storage"; // clearAuthData 추가
 import type { Profile } from "../../lib/types";
 import { palette, radius, space } from "../../theme";
 
@@ -33,6 +33,9 @@ export default function My() {
   const [openPref,  setOpenPref]    = useState(false);
   const [openAller, setOpenAller]   = useState(false);
   const [openTarget, setOpenTarget] = useState(false);
+
+  // 로그아웃 버튼 로딩 상태 추가
+  const [loading, setLoading] = useState(false);
 
   const reload = useCallback(async () => {
     const t = await loadJSON<string | null>("token", null);
@@ -67,6 +70,20 @@ export default function My() {
   const onSavePrefers  = async (arr: string[]) => profile && patchProfile({ ...profile, prefers: arr });
   const onSaveAllergens= async (arr: string[]) => profile && patchProfile({ ...profile, allergens: arr });
   const onSaveTarget   = async (kcal: number) => profile && patchProfile({ ...profile, targetKcal: kcal });
+
+  // 로그아웃 함수
+  const onLogout = async () => {
+    setLoading(true);
+    try {
+      await clearAuthData(); // 토큰 및 프로필 정보 삭제
+      router.replace("/login"); // 로그인 화면으로 이동
+    } catch (error) {
+      console.error("로그아웃 에러:", error);
+      // 에러 처리 (예: Alert.alert)
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.bg }}>
