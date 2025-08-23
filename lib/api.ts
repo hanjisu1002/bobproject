@@ -6,9 +6,6 @@ const API_BASE_URL = 'http://localhost:8000/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   withCredentials: true,  // 쿠키 포함 (CORS credentials)
 });
 
@@ -22,17 +19,17 @@ api.interceptors.request.use(async (config) => {
 });
 
 // 기존 타입 정의
-export type Box = { x:number; y:number; w:number; h:number; label?:string; score?:number };
+export type Box = { x: number; y: number; w: number; h: number; label?: string; score?: number };
 
 export type InferenceResp = {
   imageUrl: string;
   boxes: Box[];
-  menuCandidates: Array<{ name:string; score:number }>;
+  menuCandidates: Array<{ name: string; score: number }>;
   nutrition: {
     menu_id: number; // Added
     name: string;
     kcal: number;
-    macro: { carb:number; protein:number; fat:number };
+    macro: { carb: number; protein: number; fat: number };
     allergens: string[];
   }[];
 };
@@ -70,25 +67,52 @@ export const recommendAPI = {
     api.get('/recommendations', { params: { kcal_max } }),
 };
 
-// 데모용: 가짜 응답. 추후 fetch(...)로 교체하면 됨.
+// 실제 음식 인식 API 호출 함수
 export async function apiInfer(form: FormData): Promise<InferenceResp> {
-  await new Promise(r => setTimeout(r, 600)); // 로딩 느낌
-  return {
-    imageUrl: "local-selected",
-    boxes: [{ x:0.08, y:0.12, w:0.84, h:0.6, label:"불고기덮밥", score:0.92 }],
-    menuCandidates: [
-      { name:"불고기덮밥", score:0.92 },
-      { name:"소불고기정식", score:0.73 },
-      { name:"돼지불고기덮밥", score:0.61 },
-    ],
-    nutrition: [{
-      menu_id: 1, // Placeholder ID
-      name:"불고기덮밥",
-      kcal: 620,
-      macro: { carb:85, protein:23, fat:15 },
-      allergens:["대두","밀","계란"]
-    }]
-  };
+  try {
+    // Axios가 FormData를 감지하고 Content-Type 헤더를 자동으로 설정하도록 headers 속성을 제거합니다.
+    const response = await api.post('/vision/recognize-food', form);
+
+    // Backend now returns List[MenuSchema]
+    const backend_menus: Array<{ std_name: string; menu_id: number; kcal?: number; macro?: any; allergens?: string[] }> = response.data;
+
+    const menuCandidates = backend_menus.map((menu, index) => ({
+      name: menu.std_name, // Use std_name from backend response
+      score: 1.0 - (index * 0.1), // 임시 스코어
+    }));
+
+    const nutrition = backend_menus.map(menu => ({
+      menu_id: menu.menu_id,
+      name: menu.std_name,
+      kcal: menu.kcal || 0, // Provide default if null
+      macro: menu.macro || { carb: 0, protein: 0, fat: 0 }, // Provide default if null
+      allergens: menu.allergens || [], // Provide default if null
+    }));
+
+    const primaryPrediction = menuCandidates[0]?.name || '인식된 음식';
+
+    return {
+      imageUrl: "local-selected",
+      boxes: [{ x: 0.08, y: 0.12, w: 0.84, h: 0.6, label: primaryPrediction, score: 0.92 }],
+      menuCandidates,
+      nutrition: nutrition.length > 0 ? nutrition : [{
+        menu_id: 1, // 임시 ID
+        name: primaryPrediction,
+        kcal: 550, // 임시 칼로리
+        macro: { carb: 70, protein: 20, fat: 10 }, // 임시 매크로
+        allergens: ["정보 없음"] // 임시 알레르겐
+      }]
+    };
+  } catch (error) {
+    console.error("Error during food recognition API call:", error);
+    // 에러 발생 시 UI가 깨지지 않도록 비어있거나 기본값을 가진 응답 반환
+    return {
+      imageUrl: "local-selected",
+      boxes: [],
+      menuCandidates: [{ name: "인식 실패", score: 0 }],
+      nutrition: [],
+    };
+  }
 }
 
 export default api;

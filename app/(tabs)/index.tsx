@@ -231,7 +231,7 @@ export default function Home() {
           }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item }) => (
-            <Card style={{ borderRadius: radius.lg, padding: 14 }}>
+            <Card style={{ borderRadius: radius.lg, padding: 14, backgroundColor: palette.card }}>
               <Text style={{ fontSize: 18, fontWeight: "800", color: "#111827" }}>
                 {item.name}
               </Text>

@@ -189,7 +189,7 @@ export default function My() {
         <Text style={{ fontSize: 22, fontWeight: "800" }}>마이페이지</Text>
 
         {/* 상태 카드 */}
-        <Card style={{ borderRadius: radius.lg, overflow: "hidden" }}>
+        <Card style={{ borderRadius: radius.lg, overflow: "hidden", backgroundColor: palette.card }}>
           <Card.Content style={{ gap: 10 }}>
             {token && profile ? (
               <>
@@ -289,7 +289,7 @@ export default function My() {
 
         {/* 빠른 메뉴 카드 */}
         {token && profile && (
-          <Card style={{ borderRadius: radius.lg, overflow: "hidden" }}>
+          <Card style={{ borderRadius: radius.lg, overflow: "hidden", backgroundColor: palette.card }}>
             <Card.Content style={{ gap: 8 }}>
               <Text style={{ fontWeight: "700" }}>빠른 메뉴</Text>
               <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>

@@ -1,4 +1,5 @@
 // app/(tabs)/calendar.tsx
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, View } from "react-native";
 import { Calendar, DateData, LocaleConfig } from "react-native-calendars";
@@ -28,6 +29,7 @@ type Rec = {
 };
 
 export default function CalendarTab() {
+  const tabBarH = useBottomTabBarHeight();
   const [all, setAll] = useState<Rec[]>([]);
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [items, setItems] = useState<Rec[]>([]);
@@ -63,11 +65,11 @@ export default function CalendarTab() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
-      <View style={{ padding: space(2), gap: space(2) }}>
+      <View style={{ padding: space(2), flex: 1, paddingBottom: tabBarH }}>
         <Text style={{ fontSize: 22, fontWeight: "800" }}>식단 기록</Text>
 
         {/* 달력 */}
-        <Card style={{ borderRadius: radius.lg }}>
+        <Card style={{ borderRadius: radius.lg, marginBottom: space(2), backgroundColor: palette.card, elevation: 0 }}>
           <Card.Content>
             <Calendar
               markingType="dot"
@@ -88,14 +90,15 @@ export default function CalendarTab() {
         </Card>
 
         {/* 선택 날짜 요약 */}
-        <Card style={{ borderRadius: radius.lg }}>
-          <Card.Content style={{ gap: 6 }}>
+        <Card style={{ borderRadius: radius.lg, flex: 1, marginBottom: space(2), backgroundColor: palette.card, elevation: 0 }}>
+          <Card.Content style={{ flex: 1, flexDirection: 'column', justifyContent: 'flex-start' }}>
             <Text>합계: <Text style={{ fontWeight: "700" }}>{totalKcal} kcal</Text></Text>
             <Divider />
             {items.length === 0 ? (
               <Text style={{ color: "#6B7280", marginTop: 6 }}>이 날의 기록이 없어요.</Text>
             ) : (
               <FlatList
+                style={{ flex: 1 }}
                 data={items}
                 keyExtractor={(it) => String(it.id)}
                 ItemSeparatorComponent={() => <View style={{ height: 8 }} />}

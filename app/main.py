@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.routers import health, auth, me, menu, recommend, recognize, food_log
+from app.api.routers import health, auth, me, menu, recommend, recognize, food_log, vision
 from app.db.session import init_db
 from app.core.catalog import Catalog # Add this import
 
@@ -64,6 +64,7 @@ app.include_router(menu.router, prefix=f"{settings.API_PREFIX}", tags=["menu"])
 app.include_router(recommend.router, prefix=f"{settings.API_PREFIX}", tags=["recommendations"])
 app.include_router(recognize.router, prefix=f"{settings.API_PREFIX}", tags=["recognize"])
 app.include_router(food_log.router, prefix=f"{settings.API_PREFIX}", tags=["food_logs"])
+app.include_router(vision.router, prefix=f"{settings.API_PREFIX}", tags=["vision"])
 
 # ---------------------------
 # 간단한 루트 페이지
