@@ -156,22 +156,30 @@ class Chatbot:
         self,
         csv_files: List[str] = None,
         side_and_drink_files: List[str] = None,
-        model_name: str = "gemini-2.0-flash",
+        model_name: str = "gemini-1.5-flash",  # 더 가벼운 모델
         temperature: float = 0.7,
-        embed_model: str = "jhgan/ko-sroberta-multitask",
+        embed_model: str = "sentence-transformers/all-MiniLM-L6-v2",  # 더 가벼운 임베딩 모델
         device: str = "cpu",
         default_profile: Dict[str, float] = None,
     ):
         load_api_key()
 
         # LLM
-        self.llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+        self.llm = ChatGoogleGenerativeAI(
+            model=model_name, 
+            temperature=temperature,
+            max_output_tokens=1024,  # 토큰 수 제한
+            max_retries=2  # 재시도 횟수 제한
+        )
 
-        # Embeddings
+        # Embeddings - 메모리 최적화
         self.embeddings = HuggingFaceEmbeddings(
             model_name=embed_model,
             model_kwargs={"device": device},
-            encode_kwargs={"normalize_embeddings": True}
+            encode_kwargs={
+                "normalize_embeddings": True,
+                "batch_size": 8  # 배치 크기 줄임
+            }
         )
 
         # Data
@@ -209,6 +217,32 @@ class Chatbot:
         self.situational_triggers = ["먹어도 될까","먹어도될까","괜찮을까","괜찮나요","괜찮을지","함께 먹어도","같이 먹어도","먹으면 괜찮","먹어도 괜찮","제로콜라","제로 콜라","콜라","사이다","탄산","디저트","후식","아이스 아메리카노","아메리카노"]
         self.goal_keywords = ["목표","저녁 뭐 먹지","남은 목표","남은 칼로리","남은 단백질","오늘 계획","채워야"]
         self.what_is_it_triggers = ["이 음식이 뭐야","이 음식 뭐야","지금 음식 뭐야","이게 뭐야","지금 음식","현재 음식","이 음식이 뭔데"]
+
+    # ======= 지연 로딩 메서드들 =======
+    @property
+    def llm(self):
+        """LLM 모델을 필요할 때만 로드"""
+        return self._llm
+
+    @property
+    def embeddings(self):
+        """임베딩 모델을 필요할 때만 로드"""
+        return self._embeddings
+
+    @property
+    def retriever(self):
+        """RAG 검색기를 필요할 때만 생성"""
+        return self._retriever
+
+    @property
+    def retriever_side_drink(self):
+        """사이드/음료 검색기를 필요할 때만 생성"""
+        return self._retriever_side_drink
+
+    @property
+    def rag_chain(self):
+        """RAG 체인을 필요할 때만 생성"""
+        return self._rag_chain
 
     # ======= 공개 API =======
     def ask(self, user_input: str) -> str:
