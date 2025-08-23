@@ -12,3 +12,5 @@ services:
         value: postgresql://smartbite_user:06WMuWM221m8uikEmZ7F3Y1jcDT2eVF7@dpg-d2j9eendiees73bupsm0-a.singapore-postgres.render.com/smartbite
       - key: TZ
         value: Asia/Seoul
+      - key: ALLOWED_ORIGINS
+        value: "https://bobproject.vercel.app,http://localhost:3000,http://localhost:19006,http://localhost:8081"

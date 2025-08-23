@@ -2,7 +2,7 @@ import axios from 'axios';
 import { loadJSON } from './storage'; // loadJSON import 추가
 
 // 기존 백엔드 API 설정
-const API_BASE_URL = 'https://bobproject-server.onrender.com/v1';
+const API_BASE_URL = 'http://localhost:8000/v1';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -29,6 +29,7 @@ export type InferenceResp = {
   boxes: Box[];
   menuCandidates: Array<{ name:string; score:number }>;
   nutrition: {
+    menu_id: number; // Added
     name: string;
     kcal: number;
     macro: { carb:number; protein:number; fat:number };
@@ -38,10 +39,11 @@ export type InferenceResp = {
 
 // 백엔드 API 함수들
 export const authAPI = {
-  signup: (email: string, password: string) =>
-    api.post('/auth/signup', { email, password }),
+  signup: (name: string, email: string, password: string) =>
+    api.post('/auth/signup', { name, email, password }),
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
+  logout: () => api.post('/auth/logout'),
 };
 
 export const userAPI = {
@@ -49,6 +51,7 @@ export const userAPI = {
   updateProfile: (data: any) => api.put('/me/profile', data),
   getPreferences: () => api.get('/me/preferences'),
   updatePreferences: (data: any) => api.put('/me/preferences', data),
+  deleteMe: () => api.delete('/me'),
 };
 
 export const menuAPI = {
@@ -58,6 +61,8 @@ export const menuAPI = {
   searchMenu: (query: string) => api.get('/menu/search', { params: { q: query } }),
   getSimilarMenu: (id: string, k?: number) =>
     api.get(`/menu/${id}/similar`, { params: { k } }),
+  getMenuCategories: () => api.get('/menu/categories'),
+  getMenusByCategory: (category: string) => api.get(`/menu/by_category?category=${category}`), // Add this line
 };
 
 export const recommendAPI = {
@@ -77,6 +82,7 @@ export async function apiInfer(form: FormData): Promise<InferenceResp> {
       { name:"돼지불고기덮밥", score:0.61 },
     ],
     nutrition: [{
+      menu_id: 1, // Placeholder ID
       name:"불고기덮밥",
       kcal: 620,
       macro: { carb:85, protein:23, fat:15 },

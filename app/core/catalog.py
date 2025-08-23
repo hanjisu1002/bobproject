@@ -8,7 +8,7 @@ class Catalog:
     def __init__(self):
         self.menu_df = pd.read_csv(settings.FOODS_CSV)
         self.nutrition_df = pd.read_csv(settings.NUTRIENTS_CSV)
-        self.menu_by_id: Dict[int, Dict[str, Any]] = self.menu_df.set_index('menu_id').to_dict(orient='index')
+        self.menu_by_id: Dict[int, Dict[str, Any]] = self.menu_df.set_index('food_code').to_dict(orient='index')
         self.nutrition_by_food_code: Dict[str, Dict[str, Any]] = self.nutrition_df.set_index('food_code').to_dict(orient='index')
 
     def get_nutrition_scaled(self, menu_id: int, portion_g: Optional[float] = None) -> Optional[Dict[str, float]]:

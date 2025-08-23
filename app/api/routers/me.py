@@ -14,24 +14,27 @@ router = APIRouter()
 def get_profile(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """현재 로그인된 사용자의 프로필을 반환합니다."""
     user_id = user["user_id"]
+    db_user = user_crud.get_user_by_id(db, user_id=user_id) # Added this line
     db_profile, db_preferences = profile_crud.get_profile(db, user_id=user_id)
     
     profile_data = {"user_id": str(user_id)}
+    if db_user: # Added this block
+        profile_data["name"] = db_user.name
     if db_profile:
         profile_data["daily_kcal_goal"] = db_profile.daily_kcal_target
         if db_profile.macro_json:
-            profile_data["macro_ratio"] = json.loads(db_profile.macro_json)
+            profile_data["macro_ratio"] = db_profile.macro_json
         profile_data["activity_level"] = db_profile.activity_level
 
     if db_preferences:
         if db_preferences.exclude_allergens_json:
-            profile_data["exclude_allergens"] = json.loads(db_preferences.exclude_allergens_json)
+            profile_data["exclude_allergens"] = db_preferences.exclude_allergens_json
         if db_preferences.diet_types_json:
-            profile_data["diet_types"] = json.loads(db_preferences.diet_types_json)
+            profile_data["diet_types"] = db_preferences.diet_types_json
         if db_preferences.like_cuisines_json:
-            profile_data["like_cuisines"] = json.loads(db_preferences.like_cuisines_json)
+            profile_data["like_cuisines"] = db_preferences.like_cuisines_json
         if db_preferences.dislike_items_json:
-            profile_data["dislike_items"] = json.loads(db_preferences.dislike_items_json)
+            profile_data["dislike_items"] = db_preferences.dislike_items_json
 
     return Profile(**profile_data)
 
@@ -39,30 +42,33 @@ def get_profile(user: dict = Depends(get_current_user), db: Session = Depends(ge
 def update_profile(profile_in: UpdateProfile, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """사용자 프로필을 생성하거나 업데이트합니다."""
     user_id = user["user_id"]
+    db_user = user_crud.get_user_by_id(db, user_id=user_id) # Added this line
     db_profile = profile_crud.upsert_profile(db, user_id=user_id, profile_data=profile_in)
     
     # After updating, fetch the complete profile including preferences to return
     db_profile, db_preferences = profile_crud.get_profile(db, user_id=user_id)
     profile_data = {"user_id": str(user_id)}
+    if db_user: # Added this block
+        profile_data["name"] = db_user.name
     if db_profile:
         profile_data["daily_kcal_goal"] = db_profile.daily_kcal_target
         if db_profile.macro_json:
-            profile_data["macro_ratio"] = json.loads(db_profile.macro_json)
+            profile_data["macro_ratio"] = db_profile.macro_json
         profile_data["activity_level"] = db_profile.activity_level
 
     if db_preferences:
         if db_preferences.exclude_allergens_json:
-            profile_data["exclude_allergens"] = json.loads(db_preferences.exclude_allergens_json)
+            profile_data["exclude_allergens"] = db_preferences.exclude_allergens_json
         if db_preferences.diet_types_json:
-            profile_data["diet_types"] = json.loads(db_preferences.diet_types_json)
+            profile_data["diet_types"] = db_preferences.diet_types_json
         if db_preferences.like_cuisines_json:
-            profile_data["like_cuisines"] = json.loads(db_preferences.like_cuisines_json)
+            profile_data["like_cuisines"] = db_preferences.like_cuisines_json
         if db_preferences.dislike_items_json:
-            profile_data["dislike_items"] = json.loads(db_preferences.dislike_items_json)
+            profile_data["dislike_items"] = db_preferences.dislike_items_json
 
     return Profile(**profile_data)
 
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
 def delete_me(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """현재 로그인된 사용자 계정을 삭제합니다."""
     user_id = user["user_id"]

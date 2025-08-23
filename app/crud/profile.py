@@ -32,10 +32,31 @@ def upsert_profile(db: Session, user_id: int, profile_data: UpdateProfile) -> Us
             elif key == "dislike_items" and value is not None:
                 db_preferences.dislike_items_json = json.dumps(value)
         else:
+            # Handle UserProfile fields
             if key == "daily_kcal_goal":
                 setattr(db_profile, "daily_kcal_target", value)
             elif key == "macro_ratio":
-                setattr(db_profile, "macro_json", json.dumps(value))
+                if value is not None and db_profile.daily_kcal_target is not None: # Check if daily_kcal_target is available
+                    total_kcal = db_profile.daily_kcal_target
+                    
+                    # Convert percentages to grams
+                    carb_g = (total_kcal * value.get("carb", 0) / 100) / 4
+                    protein_g = (total_kcal * value.get("protein", 0) / 100) / 4
+                    fat_g = (total_kcal * value.get("fat", 0) / 100) / 9
+
+                    # Store as gram-based dictionary
+                    gram_macro = {
+                        "carb_g": round(carb_g, 2),
+                        "protein_g": round(protein_g, 2),
+                        "fat_g": round(fat_g, 2)
+                    }
+                    setattr(db_profile, "macro_json", json.dumps(gram_macro))
+                else:
+                    setattr(db_profile, "macro_json", None) # Set to None if value is None or daily_kcal_target is None
+            elif key == "sex" and value is not None: # Add sex handling
+                setattr(db_profile, "sex", value)
+            elif key == "age" and value is not None: # Add age handling
+                setattr(db_profile, "age", value)
             else:
                 setattr(db_profile, key, value)
     

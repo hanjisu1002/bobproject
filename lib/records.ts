@@ -5,22 +5,30 @@ import api from './api';
 
 export type RecordItem = {
   id?: string | number;
+  menu_id?: number; // Added
   date: string; // YYYY-MM-DD
   menu?: string; // menu_name
   kcal?: number;
-  macro?: { carb: number; protein: number; fat: number };
+  macro?: { carb_g: number; protein_g: number; fat_g: number }; // Changed to grams
 };
 
-// addRecord 함수는 백엔드에 menu_id를 전달해야 하므로, 현재는 주석 처리합니다.
-// 프론트엔드에서 menu_id를 얻는 로직이 필요합니다.
-/*
 export async function addRecord(item: RecordItem) {
-  // 백엔드 API 호출 로직으로 대체 필요
-  // 예: await api.post('/food_logs', { menu_id: item.menu_id, portion_g: ..., meal_type: ... });
-  console.warn("addRecord: This function needs to be implemented to call the backend API with menu_id.");
-  return [];
+  try {
+    // Assuming a default portion_g for now, as it's not provided by apiInfer
+    const portion_g = 100; // Default to 100g
+    const meal_type = "lunch"; // Default to lunch, or could be passed from UI
+
+    await api.post('/food_logs', {
+      menu_id: item.menu_id,
+      portion_g: portion_g,
+      meal_type: meal_type,
+    });
+    console.log("Record added successfully!");
+  } catch (error) {
+    console.error("Error adding record:", error);
+    throw error; // Re-throw to be caught by the caller (upload.tsx)
+  }
 }
-*/
 
 export async function listRecords(): Promise<RecordItem[]> {
   try {
@@ -63,11 +71,11 @@ export async function getTodaySummary() {
   const totalKcal = items.reduce((sum, it) => sum + (it.kcal ?? 0), 0);
   const totalMacro = items.reduce(
     (acc, it) => ({
-      carb: acc.carb + (it.macro?.carb ?? 0),
-      protein: acc.protein + (it.macro?.protein ?? 0),
-      fat: acc.fat + (it.macro?.fat ?? 0),
+      carb_g: acc.carb_g + (it.macro?.carb_g ?? 0),
+      protein_g: acc.protein_g + (it.macro?.protein_g ?? 0),
+      fat_g: acc.fat_g + (it.macro?.fat_g ?? 0),
     }),
-    { carb: 0, protein: 0, fat: 0 }
+    { carb_g: 0, protein_g: 0, fat_g: 0 }
   );
 
   return { date: today, items, totalKcal, totalMacro };

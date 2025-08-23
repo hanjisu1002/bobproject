@@ -1,48 +1,47 @@
 // components/RingProgress.tsx
 import React from "react";
-import Svg, { Circle } from "react-native-svg";
+import { Circle, Svg } from "react-native-svg";
 
-type Props = {
-  size?: number;          // 전체 크기
-  strokeWidth?: number;   // 선 굵기
-  progress: number;       // 0 ~ 1
-  color?: string;         // 진행 색
-  bgColor?: string;       // 배경 링 색
-};
+import { palette } from "../theme";
+
+interface Props {
+  size?: number;
+  strokeWidth?: number;
+  progress?: number; // 0 ~ 1
+  color?: string;
+}
 
 export default function RingProgress({
-  size = 120,
+  size = 100,
   strokeWidth = 10,
-  progress,
-  color = "#7C3AED",
-  bgColor = "#E5E7EB",
+  progress = 0,
+  color = palette.primary,
 }: Props) {
-  const r = (size - strokeWidth) / 2;
-  const c = 2 * Math.PI * r;                         // 둘레
-  const clamped = Math.max(0, Math.min(1, progress));
-  const offset = c * (1 - clamped);
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - progress);
 
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {/* 배경 링 */}
+    <Svg width={size} height={size}>
+      {/* 배경 원 */}
       <Circle
+        stroke="#E5E7EB"
+        fill="none"
         cx={size / 2}
         cy={size / 2}
-        r={r}
-        stroke={bgColor}
+        r={radius}
         strokeWidth={strokeWidth}
-        fill="none"
       />
-      {/* 진행 링 (위쪽 12시 방향에서 시작하도록 -90deg 회전) */}
+      {/* 진행 원 */}
       <Circle
+        stroke={color}
+        fill="none"
         cx={size / 2}
         cy={size / 2}
-        r={r}
-        stroke={color}
+        r={radius}
         strokeWidth={strokeWidth}
-        fill="none"
-        strokeDasharray={`${c} ${c}`}
-        strokeDashoffset={offset}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
         strokeLinecap="round"
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />

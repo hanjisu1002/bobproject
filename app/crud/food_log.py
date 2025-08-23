@@ -26,9 +26,9 @@ def _get_food_log_with_details(db: Session, query):
             scale = log.portion_g / 100.0
             kcal = nutrition.energy_kcal * scale if nutrition.energy_kcal else None
             macro = {
-                "carb": nutrition.carb_g * scale if nutrition.carb_g else 0,
-                "protein": nutrition.protein_g * scale if nutrition.protein_g else 0,
-                "fat": nutrition.fat_g * scale if nutrition.fat_g else 0,
+                "carb_g": nutrition.carb_g * scale if nutrition.carb_g else 0,
+                "protein_g": nutrition.protein_g * scale if nutrition.protein_g else 0,
+                "fat_g": nutrition.fat_g * scale if nutrition.fat_g else 0,
             }
 
         food_logs_with_details.append(FoodLogResponse(

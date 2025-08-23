@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text, DateTime
+from sqlalchemy import Column, Integer, Text, DateTime, Computed # Import Computed
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -11,7 +11,7 @@ class Menu(Base):
     slug = Column(Text, unique=True, nullable=False)
     std_name = Column(Text, nullable=False)
     category = Column(Text)
-    std_name_norm = Column(Text) # This is a GENERATED ALWAYS AS column in SQL
+    std_name_norm = Column(Text, Computed("lower(replace(replace(replace(replace(std_name,' ',''),'-',''),'_',''),'/',''))")) # Use Computed
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 

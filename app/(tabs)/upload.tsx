@@ -128,7 +128,7 @@ export default function Upload() {
   const saveRecord = async () => {
     if (!res) return;
     const n = res.nutrition[0];
-    await addRecord({ date: new Date().toISOString().slice(0,10), menu: n?.name, kcal: n?.kcal, macro: n?.macro });
+    await addRecord({ date: new Date().toISOString().slice(0,10), menu_id: n?.menu_id, menu: n?.name, kcal: n?.kcal, macro: n?.macro });
     alert("오늘 기록에 저장했어요!");
   };
 

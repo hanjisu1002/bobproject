@@ -29,6 +29,6 @@ class Settings(BaseSettings):
 
     # CORS
     # 개발 편의를 위해 모든 Origin 허용 (운영 환경에서는 특정 도메인만 허용 권장)
-    ALLOWED_ORIGINS: str = "https://bobproject.vercel.app,http://localhost:3000,http://localhost:19006"
+    ALLOWED_ORIGINS: str = "https://bobproject.vercel.app,http://localhost:3000,http://localhost:19006,http://localhost:8081"
 
 settings = Settings()
