@@ -34,13 +34,18 @@ export async function listRecords(): Promise<RecordItem[]> {
   try {
     const response = await api.get('/food_logs/all');
     // 백엔드 FoodLogResponse를 RecordItem으로 매핑
-    return response.data.map((log: any) => ({
-      id: log.id,
-      date: new Date(log.consumed_at).toISOString().slice(0, 10),
-      menu: log.menu_name,
-      kcal: log.kcal,
-      macro: log.macro,
-    }));
+    return response.data.map((log: any) => {
+      const consumedDate = new Date(log.consumed_at);
+      // Convert to local date string in YYYY-MM-DD format
+      const localDate = consumedDate.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      return {
+        id: log.id,
+        date: localDate, // Use localDate instead of ISO string slice
+        menu: log.menu_name,
+        kcal: log.kcal,
+        macro: log.macro,
+      };
+    });
   } catch (error) {
     console.error("Error fetching all records:", error);
     return [];
@@ -51,13 +56,18 @@ export async function listRecordsByDate(date: string): Promise<RecordItem[]> {
   try {
     const response = await api.get('/food_logs/by_date', { params: { target_date: date } });
     // 백엔드 FoodLogResponse를 RecordItem으로 매핑
-    return response.data.map((log: any) => ({
-      id: log.id,
-      date: new Date(log.consumed_at).toISOString().slice(0, 10),
-      menu: log.menu_name,
-      kcal: log.kcal,
-      macro: log.macro,
-    }));
+    return response.data.map((log: any) => {
+      const consumedDate = new Date(log.consumed_at);
+      // Convert to local date string in YYYY-MM-DD format
+      const localDate = consumedDate.toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      return {
+        id: log.id,
+        date: localDate, // Use localDate instead of ISO string slice
+        menu: log.menu_name,
+        kcal: log.kcal,
+        macro: log.macro,
+      };
+    });
   } catch (error) {
     console.error(`Error fetching records for date ${date}:`, error);
     return [];
@@ -65,7 +75,7 @@ export async function listRecordsByDate(date: string): Promise<RecordItem[]> {
 }
 
 export async function getTodaySummary() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }); // Use local date
   const items = await listRecordsByDate(today);
 
   const totalKcal = items.reduce((sum, it) => sum + (it.kcal ?? 0), 0);

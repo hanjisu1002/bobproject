@@ -4,6 +4,7 @@ from app.models.menu import Menu
 from app.models.nutrition import Nutrition
 from app.schemas.food_log import FoodLogCreate, FoodLogResponse
 from datetime import date, datetime, time
+import pytz
 
 def create_food_log(db: Session, user_id: int, food_log: FoodLogCreate) -> UserFoodLog:
     db_food_log = UserFoodLog(**food_log.model_dump(), user_id=user_id)
@@ -45,12 +46,20 @@ def _get_food_log_with_details(db: Session, query):
     return food_logs_with_details
 
 def get_food_logs_by_user_and_date(db: Session, user_id: int, target_date: date) -> list[FoodLogResponse]:
-    start_of_day = datetime.combine(target_date, time.min)
-    end_of_day = datetime.combine(target_date, time.max)
+    KST = pytz.timezone('Asia/Seoul')
+    
+    # Create timezone-aware KST datetimes for the start and end of the target_date
+    start_of_day_kst = KST.localize(datetime.combine(target_date, time.min))
+    end_of_day_kst = KST.localize(datetime.combine(target_date, time.max))
+
+    # Convert KST datetimes to UTC for database query
+    start_of_day_utc = start_of_day_kst.astimezone(pytz.utc)
+    end_of_day_utc = end_of_day_kst.astimezone(pytz.utc)
+
     query = db.query(UserFoodLog, Menu, Nutrition).filter(
         UserFoodLog.user_id == user_id,
-        UserFoodLog.consumed_at >= start_of_day,
-        UserFoodLog.consumed_at <= end_of_day
+        UserFoodLog.consumed_at >= start_of_day_utc,
+        UserFoodLog.consumed_at <= end_of_day_utc
     )
     return _get_food_log_with_details(db, query)
 
