@@ -54,13 +54,12 @@ langchain-community>=0.0.38
 langchain-google-genai>=0.0.5,<0.1.0  # 안정적인 0.0.x 버전 # 실제 존재하는 0.0.x 버전
 google-generativeai>=0.3.0,<0.4.0  # 안정적인 버전
 faiss-cpu>=1.7.0,<1.8.0
-sentence-transformers>=2.6.0,<2.7.0  # langchain-huggingface와 호환되는 버전
 
 transformers==4.40.2
 tokenizers==0.19.1
+sentence-transformers==2.6.1
 langchain-huggingface==0.0.1
 regex==2023.12.25
-
 # 메모리 최적화 (Python 3.11 호환)
 # langchain-huggingface와 호환되는 최신 버전
 # torch-cpu는 Python 3.13에서 지원되지 않음 - CPU 전용 PyTorch는 자동으로 설치됨
