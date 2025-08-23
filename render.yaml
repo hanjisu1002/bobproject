@@ -7,7 +7,7 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.6
+        value: 3.11.6  # Python 3.13 대신 3.11 사용 (torch-cpu 호환성)
       - key: DATABASE_URL
         value: postgresql://smartbite_user:06WMuWM221m8uikEmZ7F3Y1jcDT2eVF7@dpg-d2j9eendiees73bupsm0-a.singapore-postgres.render.com/smartbite
       - key: TZ
@@ -20,3 +20,5 @@ services:
         value: /tmp/huggingface
       - key: TOKENIZERS_PARALLELISM
         value: false
+      - key: PYTORCH_NO_CUDA_MEMORY_CACHING
+        value: "1"  # CUDA 메모리 캐싱 비활성화
