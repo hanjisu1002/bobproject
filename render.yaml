@@ -3,7 +3,7 @@ services:
     name: smartbite-api
     environment:
     rootDir: .              # 현재 루트 디렉토리 (app/ 폴더가 여기 있음)
-    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip setuptools wheel && PIP_PREFER_BINARY=1 pip install --prefer-binary -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     envVars:
       - key: PYTHON_VERSION
