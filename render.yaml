@@ -13,7 +13,7 @@ services:
       - key: TZ
         value: Asia/Seoul
       - key: PYTORCH_CUDA_ALLOC_CONF
-        value: max_split_size_mb:128
+        value: max_split_size_mb:64  # 메모리 블록 크기 더 줄임
       - key: TRANSFORMERS_CACHE
         value: /tmp/transformers_cache
       - key: HF_HOME
@@ -22,3 +22,11 @@ services:
         value: false
       - key: PYTORCH_NO_CUDA_MEMORY_CACHING
         value: "1"  # CUDA 메모리 캐싱 비활성화
+      - key: OMP_NUM_THREADS
+        value: "1"  # OpenMP 스레드 수 제한
+      - key: MKL_NUM_THREADS
+        value: "1"  # MKL 스레드 수 제한
+      - key: NUMEXPR_NUM_THREADS
+        value: "1"  # NumExpr 스레드 수 제한
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"  # OpenBLAS 스레드 수 제한

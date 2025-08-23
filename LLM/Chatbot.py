@@ -156,29 +156,29 @@ class Chatbot:
         self,
         csv_files: List[str] = None,
         side_and_drink_files: List[str] = None,
-        model_name: str = "gemini-1.5-flash",  # 더 가벼운 모델
+        model_name: str = "gemini-1.0-pro",  # 가장 가벼운 Gemini 모델
         temperature: float = 0.7,
-        embed_model: str = "sentence-transformers/all-MiniLM-L6-v2",  # 더 가벼운 임베딩 모델
+        embed_model: str = "sentence-transformers/paraphrase-MiniLM-L3-v2",  # 가장 가벼운 임베딩 모델
         device: str = "cpu",
         default_profile: Dict[str, float] = None,
     ):
         load_api_key()
 
-        # LLM
+        # LLM - 메모리 최적화 강화
         self.llm = ChatGoogleGenerativeAI(
             model=model_name, 
             temperature=temperature,
-            max_output_tokens=1024,  # 토큰 수 제한
-            max_retries=2  # 재시도 횟수 제한
+            max_output_tokens=512,  # 토큰 수 더 제한
+            max_retries=1  # 재시도 횟수 최소화
         )
 
-        # Embeddings - 메모리 최적화
+        # Embeddings - 메모리 최적화 강화
         self.embeddings = HuggingFaceEmbeddings(
             model_name=embed_model,
             model_kwargs={"device": device},
             encode_kwargs={
                 "normalize_embeddings": True,
-                "batch_size": 8  # 배치 크기 줄임
+                "batch_size": 4  # 배치 크기 더 줄임
             }
         )
 
