@@ -9,17 +9,13 @@ import sys
 
 # LLM 모듈 import 시도
 try:
-    sys.path.append('ybigta_LLM')
+    sys.path.append('LLM')
     from LLM.Chatbot import Chatbot
     LLM_AVAILABLE = True
-except ImportError:
-    try:
-        sys.path.append('LLM')
-        from LLM.Chatbot import Chatbot
-        LLM_AVAILABLE = True
-    except ImportError:
-        print("Warning: LLM.Chatbot import failed. Using fallback chatbot.")
-        LLM_AVAILABLE = False
+    print("✅ LLM 모듈 import 성공")
+except ImportError as e:
+    print(f"❌ LLM.Chatbot import 실패: {e}")
+    LLM_AVAILABLE = False
 
 class ChatbotService:
     """챗봇 서비스 클래스"""
@@ -34,35 +30,10 @@ class ChatbotService:
     def _load_food_data(self):
         """음식 데이터 로드"""
         try:
-            # 여러 경로에서 CSV 파일 로드 시도
-            food_data_paths = [
-                'ybigta_LLM/food_data_description.csv',
-                'LLM/food_data_description.csv',
-                'ybigta_LLM/drink.csv',
-                'LLM/drink.csv'
-            ]
-            
-            for path in food_data_paths:
-                if os.path.exists(path):
-                    print(f"✅ 음식 데이터 경로 발견: {path}")
-                    break
-            else:
-                print("⚠️ 음식 데이터 파일을 찾을 수 없습니다")
-                return
-            
-            # 데이터 로드 시도
-            try:
-                food_df = pd.read_csv('ybigta_LLM/food_data_description.csv')
-                drink_df = pd.read_csv('ybigta_LLM/drink.csv')
-                sidedish_df = pd.read_csv('ybigta_LLM/sidedish.csv')
-            except:
-                try:
-                    food_df = pd.read_csv('LLM/food_data_description.csv')
-                    drink_df = pd.read_csv('LLM/drink.csv')
-                    sidedish_df = pd.read_csv('LLM/sidedish.csv')
-                except Exception as e:
-                    print(f"❌ 음식 데이터 로드 실패: {e}")
-                    return
+            # LLM 디렉토리의 CSV 파일들 로드
+            food_df = pd.read_csv('LLM/food_data_description.csv')
+            drink_df = pd.read_csv('LLM/drink.csv')
+            sidedish_df = pd.read_csv('LLM/sidedish.csv')
             
             # 데이터 통합
             self.food_data = {
@@ -85,7 +56,13 @@ class ChatbotService:
                 print(f"❌ LLM 챗봇 초기화 실패: {e}")
                 self.chatbot = None
         else:
-            print("⚠️ LLM 챗봇 초기화 건너뜀 (API 키 또는 데이터 없음)")
+            if not self.api_key:
+                print("⚠️ GOOGLE_API_KEY가 설정되지 않음")
+            if not self.food_data:
+                print("⚠️ 음식 데이터를 로드할 수 없음")
+            if not LLM_AVAILABLE:
+                print("⚠️ LLM 모듈을 import할 수 없음")
+            print("⚠️ LLM 챗봇 초기화 건너뜀")
             self.chatbot = None
     
     async def get_response(
