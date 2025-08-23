@@ -56,3 +56,7 @@ langchain-huggingface>=0.2.0
 google-generativeai>=0.8.0
 faiss-cpu>=1.7.4
 sentence-transformers>=2.5.0
+
+# 메모리 최적화
+torch-cpu>=2.5.0  # CPU 전용 PyTorch (GPU 메모리 사용 안함)
+transformers>=4.40.0  # 최신 버전으로 메모리 효율성 개선
