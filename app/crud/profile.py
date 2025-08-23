@@ -9,6 +9,10 @@ def get_profile(db: Session, user_id: int) -> tuple[UserProfile | None, UserPref
     db_preferences = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
     return db_profile, db_preferences
 
+def get_profile_by_user_id(db: Session, user_id: int) -> tuple[UserProfile | None, UserPreferences | None]:
+    """사용자 ID로 프로필 정보 가져오기"""
+    return get_profile(db, user_id)
+
 def upsert_profile(db: Session, user_id: int, profile_data: UpdateProfile) -> UserProfile:
     db_profile, db_preferences = get_profile(db, user_id)
     if not db_profile:
