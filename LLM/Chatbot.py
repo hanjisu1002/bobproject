@@ -219,30 +219,26 @@ class Chatbot:
         self.what_is_it_triggers = ["이 음식이 뭐야","이 음식 뭐야","지금 음식 뭐야","이게 뭐야","지금 음식","현재 음식","이 음식이 뭔데"]
 
     # ======= 지연 로딩 메서드들 =======
-    @property
-    def llm(self):
-        """LLM 모델을 필요할 때만 로드"""
-        return self._llm
+    # @property 데코레이터 제거 - 원래 방식으로 복원
+    # def llm(self):
+    #     """LLM 모델을 필요할 때만 로드"""
+    #     return self._llm
 
-    @property
-    def embeddings(self):
-        """임베딩 모델을 필요할 때만 로드"""
-        return self._embeddings
+    # def embeddings(self):
+    #     """임베딩 모델을 필요할 때만 로드"""
+    #     return self._embeddings
 
-    @property
-    def retriever(self):
-        """RAG 검색기를 필요할 때만 생성"""
-        return self._retriever
+    # def retriever(self):
+    #     """RAG 검색기를 필요할 때만 생성"""
+    #     return self._retriever
 
-    @property
-    def retriever_side_drink(self):
-        """사이드/음료 검색기를 필요할 때만 생성"""
-        return self._retriever_side_drink
+    # def retriever_side_drink(self):
+    #     """사이드/음료 검색기를 필요할 때만 생성"""
+    #     return self._retriever_side_drink
 
-    @property
-    def rag_chain(self):
-        """RAG 체인을 필요할 때만 생성"""
-        return self._rag_chain
+    # def rag_chain(self):
+    #     """RAG 체인을 필요할 때만 생성"""
+    #     return self._rag_chain
 
     # ======= 공개 API =======
     def ask(self, user_input: str) -> str:
