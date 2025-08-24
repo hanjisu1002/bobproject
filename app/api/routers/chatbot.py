@@ -62,11 +62,22 @@ async def chat_with_bot(
             detail="로그인이 필요합니다"
         )
     
-    # 사용자 ID 일치 확인
-    if request.user_context.user_id != current_user.user_id:
+    # 사용자 ID 일치 확인 (타입 안전성 개선)
+    try:
+        current_user_id = str(current_user.user_id)
+        request_user_id = str(request.user_context.user_id)
+        
+        if request_user_id != current_user_id:
+            print(f"⚠️ 사용자 ID 불일치: 요청={request_user_id}, 현재={current_user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"자신의 계정에서만 사용할 수 있습니다 (요청: {request_user_id}, 현재: {current_user_id})"
+            )
+    except Exception as e:
+        print(f"❌ 사용자 ID 검증 실패: {e}")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="자신의 계정에서만 사용할 수 있습니다"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="사용자 ID 검증에 실패했습니다"
         )
     
     try:
@@ -88,7 +99,7 @@ async def chat_with_bot(
         # 응답 생성
         response = ChatResponse(
             message_id=str(uuid.uuid4()),
-            user_id=current_user.user_id,
+            user_id=current_user_id,
             message=request.message,
             response=response_text,
             timestamp=datetime.now(),
@@ -98,6 +109,7 @@ async def chat_with_bot(
         return response
         
     except Exception as e:
+        print(f"❌ 챗봇 응답 생성 실패: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"챗봇 응답 생성 중 오류가 발생했습니다: {str(e)}"
