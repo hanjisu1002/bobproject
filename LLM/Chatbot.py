@@ -178,11 +178,11 @@ class Chatbot:
         self._rag_chain = None
 
         # Data (즉시 로드 - CSV는 가벼움)
-        csv_files = csv_files or ["food_data_description.csv", "drink.csv", "sidedish.csv"]
+        csv_files = csv_files or ["LLM/food_data_description.csv", "LLM/drink.csv", "LLM/sidedish.csv"]
         self.master_df = load_and_normalize_data(csv_files)
         self.FOOD_NAMES: Set[str] = build_food_name_set(self.master_df)
 
-        side_and_drink_files = side_and_drink_files or ["sidedish.csv", "drink.csv"]
+        side_and_drink_files = side_and_drink_files or ["LLM/sidedish.csv", "LLM/drink.csv"]
         self.side_and_drink_df = load_and_normalize_data(side_and_drink_files)
 
         # 상태

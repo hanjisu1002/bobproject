@@ -1,11 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Optional
 from app.schemas.chatbot import ChatRequest, ChatResponse, ChatHistory
-from app.core.chatbot_service import chatbot_service
 from app.core.security import get_current_user
 from app.schemas.auth import TokenData
+from app.crud.profile import get_profile_by_user_id
+from app.crud.food_log import get_user_food_logs_today
 import uuid
 from datetime import datetime
+import sys
+import os
+
+# LLM 디렉토리를 Python 경로에 추가
+sys.path.append('LLM')
+
+# 전역 챗봇 인스턴스
+chatbot = None
+
+def get_chatbot():
+    """챗봇 인스턴스 반환 (지연 로딩)"""
+    global chatbot
+    if chatbot is None:
+        try:
+            from LLM.Chatbot import Chatbot
+            print("🤖 챗봇 인스턴스 생성 중...")
+            
+            # CSV 파일 경로 설정
+            csv_files = ["LLM/food_data_description.csv", "LLM/drink.csv", "LLM/sidedish.csv"]
+            side_drink_files = ["LLM/sidedish.csv", "LLM/drink.csv"]
+            
+            chatbot = Chatbot(
+                csv_files=csv_files,
+                side_and_drink_files=side_drink_files
+            )
+            print("✅ 챗봇 초기화 성공!")
+            
+        except Exception as e:
+            print(f"❌ 챗봇 초기화 실패: {e}")
+            return None
+    
+    return chatbot
 
 router = APIRouter()
 
@@ -37,10 +70,28 @@ async def chat_with_bot(
         )
     
     try:
+        # 챗봇 인스턴스 가져오기
+        bot = get_chatbot()
+        if bot is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="챗봇을 초기화할 수 없습니다"
+            )
+        
+        # 사용자 프로필 설정
+        if request.user_context.profile:
+            bot.set_user_profile(request.user_context.profile)
+        
         # 챗봇 응답 생성
-        response = await chatbot_service.get_response(
+        response_text = bot.ask(request.message)
+        
+        # 응답 생성
+        response = ChatResponse(
+            message_id=str(uuid.uuid4()),
+            user_id=current_user.user_id,
             message=request.message,
-            user_context=request.user_context,
+            response=response_text,
+            timestamp=datetime.now(),
             food_recognition=request.food_recognition
         )
         
@@ -82,9 +133,28 @@ async def chat_with_image_recognition(
         )
     
     try:
-        response = await chatbot_service.get_response(
+        # 챗봇 인스턴스 가져오기
+        bot = get_chatbot()
+        if bot is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="챗봇을 초기화할 수 없습니다"
+            )
+        
+        # 사용자 프로필 설정
+        if request.user_context.profile:
+            bot.set_user_profile(request.user_context.profile)
+        
+        # 챗봇 응답 생성
+        response_text = bot.ask(request.message)
+        
+        # 응답 생성
+        response = ChatResponse(
+            message_id=str(uuid.uuid4()),
+            user_id=current_user.user_id,
             message=request.message,
-            user_context=request.user_context,
+            response=response_text,
+            timestamp=datetime.now(),
             food_recognition=request.food_recognition
         )
         
@@ -121,10 +191,10 @@ async def get_user_chat_context(
     
     try:
         # 사용자 프로필 정보 가져오기
-        user_profile = await chatbot_service._get_user_profile(user_id)
+        user_profile = await get_profile_by_user_id(user_id)
         
         # 오늘 섭취한 음식 정보 가져오기
-        today_foods = await chatbot_service._get_today_food_logs(user_id)
+        today_foods = await get_user_food_logs_today(user_id)
         
         context = {
             "user_id": user_id,
@@ -149,11 +219,13 @@ async def chatbot_health_check():
     LLM 연결 상태와 음식 데이터 로드 상태를 확인합니다.
     """
     
+    bot = get_chatbot()
+    
     health_status = {
         "status": "healthy",
-        "llm_available": chatbot_service.chatbot is not None,
-        "food_data_loaded": chatbot_service.food_data is not None,
-        "api_key_configured": chatbot_service.api_key is not None,
+        "llm_available": bot is not None,
+        "food_data_loaded": bot is not None and hasattr(bot, 'master_df'),
+        "api_key_configured": os.getenv("GOOGLE_API_KEY") is not None,
         "timestamp": datetime.now().isoformat()
     }
     
