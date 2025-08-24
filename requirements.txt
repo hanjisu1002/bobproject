@@ -20,32 +20,32 @@ pillow>=10.3.0
 psutil>=5.9.0,<6.0.0  # 메모리 사용량 모니터링
 
 # AI 모델 (메모리 최적화)
-onnxruntime>=1.18.0,<1.19.0  # 버전 제한으로 메모리 안정화
+onnxruntime>=1.20.0,<1.23.0  # 현재 사용 가능한 버전으로 조정
 ultralytics>=8.2.0,<8.4.0    # 버전 제한으로 메모리 안정화
 
 # Torch & CLIP (메모리 최적화)
-torch>=2.5.0,<2.6.0          # 버전 제한으로 메모리 안정화
-open-clip-torch>=2.24.0,<2.25.0  # 버전 제한으로 메모리 안정화
-huggingface_hub>=0.23.0,<0.25.0  # 버전 제한으로 메모리 안정화
-safetensors>=0.4.2,<0.5.0    # 버전 제한으로 메모리 안정화
+torch>=2.5.0          # 최신 안정 버전 사용
+open-clip-torch>=2.24.0  # 최신 안정 버전 사용
+huggingface_hub>=0.23.0  # 최신 안정 버전 사용
+safetensors>=0.4.2    # 최신 안정 버전 사용
 
 # LLM & LangChain (메모리 최적화)
-langchain>=0.1.0,<0.2.0      # 안정적인 버전
-langchain-community>=0.0.38,<0.1.0  # 안정적인 버전
-langchain-google-genai>=0.0.5,<0.1.0  # 안정적인 버전
-google-generativeai>=0.3.0,<0.4.0  # 안정적인 버전
+langchain>=0.1.0      # 안정적인 버전
+langchain-community>=0.0.38  # 안정적인 버전
+langchain-google-genai>=0.0.5  # 안정적인 버전
+google-generativeai>=0.3.0  # 안정적인 버전
 
 # 벡터 DB (메모리 최적화)
-faiss-cpu>=1.7.0,<1.8.0      # 버전 제한으로 메모리 안정화
-sentence-transformers>=2.6.0,<2.7.0  # 버전 제한으로 메모리 안정화
+faiss-cpu>=1.7.0      # 안정적인 버전
+sentence-transformers>=2.6.0  # 안정적인 버전
 
 # Transformers (메모리 최적화)
-transformers>=4.40.0,<4.41.0  # 안정적인 버전
-tokenizers>=0.19.1,<0.20.0    # 버전 제한으로 메모리 안정화
-langchain-huggingface>=0.0.1,<0.0.4  # 안정적인 버전
+transformers>=4.40.0  # 안정적인 버전
+tokenizers>=0.19.1    # 안정적인 버전
+langchain-huggingface>=0.0.1  # 안정적인 버전
 
 # 정규표현식
-regex>=2023.12.25,<2024.0.0  # 버전 제한으로 메모리 안정화
+regex>=2023.12.25  # 안정적인 버전
 
 # 메모리 최적화 (Python 3.11 호환)
 # torch-cpu는 Python 3.13에서 지원되지 않음 - CPU 전용 PyTorch는 자동으로 설치됨

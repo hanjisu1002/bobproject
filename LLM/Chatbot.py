@@ -205,7 +205,7 @@ class Chatbot:
             self._llm = ChatGoogleGenerativeAI(
                 model=self._model_name, 
                 temperature=self._temperature,
-                max_output_tokens=256,  # 토큰 수 더 제한
+                max_output_tokens=128,  # 토큰 수 더욱 제한 (256 → 128)
                 max_retries=1,  # 재시도 횟수 최소화
                 convert_system_message_to_human=True  # SystemMessage 호환성 해결
             )
@@ -220,7 +220,7 @@ class Chatbot:
                 model_kwargs={"device": self._device},
                 encode_kwargs={
                     "normalize_embeddings": True,
-                    "batch_size": 2  # 배치 크기 더 줄임
+                    "batch_size": 1  # 배치 크기 최소화 (2 → 1)
                 }
             )
         return self._embeddings
