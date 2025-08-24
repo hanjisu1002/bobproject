@@ -12,7 +12,7 @@ class UserProfile(Base):
     daily_kcal_target = Column(Integer)
     macro_json = Column(Text)  # JSON string
     activity_level = Column(Text)
-    is_completed = Column(Boolean, nullable=False, default=False)  # 0/1 -> True/False
+    is_completed = Column(Boolean, nullable=False, default=False)  # boolean으로 변경
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="profile")

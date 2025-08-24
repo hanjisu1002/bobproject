@@ -68,3 +68,9 @@ def get_all_food_logs_by_user(db: Session, user_id: int) -> list[FoodLogResponse
         UserFoodLog.user_id == user_id
     )
     return _get_food_log_with_details(db, query)
+
+def get_user_food_logs_today(db: Session, user_id: int) -> list[FoodLogResponse]:
+    """오늘 사용자가 섭취한 음식 로그 가져오기"""
+    from datetime import date
+    today = date.today()
+    return get_food_logs_by_user_and_date(db, user_id, today)

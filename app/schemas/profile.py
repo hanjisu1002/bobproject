@@ -11,6 +11,7 @@ class Profile(BaseModel):
     diet_types: Optional[List[str]] = None
     like_cuisines: Optional[List[str]] = None
     dislike_items: Optional[List[str]] = None
+    is_completed: Optional[bool] = False  # boolean 필드 추가
 
 class UpdateProfile(BaseModel):
     sex: Optional[str] = None # 성별 필드 추가
@@ -22,3 +23,4 @@ class UpdateProfile(BaseModel):
     diet_types: Optional[List[str]] = None
     like_cuisines: Optional[List[str]] = None
     dislike_items: Optional[List[str]] = None
+    is_completed: Optional[bool] = None  # boolean 필드 추가

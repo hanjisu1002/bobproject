@@ -1,16 +1,60 @@
 services:
   - type: web
-    name: smartbite-api
-    env: python
+    name: bobproject-server
+    environment:
     rootDir: .              # 현재 루트 디렉토리 (app/ 폴더가 여기 있음)
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip setuptools wheel && PIP_PREFER_BINARY=1 pip install --prefer-binary -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.6
+        value: 3.11.6  # Python 3.13 대신 3.11 사용 (torch-cpu 호환성)
       - key: DATABASE_URL
         value: postgresql://smartbite_user:06WMuWM221m8uikEmZ7F3Y1jcDT2eVF7@dpg-d2j9eendiees73bupsm0-a.singapore-postgres.render.com/smartbite
       - key: TZ
         value: Asia/Seoul
-      - key: ALLOWED_ORIGINS
-        value: "https://bobproject.vercel.app,http://localhost:3000,http://localhost:19006,http://localhost:8081"
+      
+      # 메모리 최적화 환경변수 (강화)
+      - key: PYTORCH_CUDA_ALLOC_CONF
+        value: max_split_size_mb:16  # 메모리 블록 크기 더 줄임
+      - key: TRANSFORMERS_CACHE
+        value: /tmp/transformers_cache
+      - key: HF_HOME
+        value: /tmp/huggingface
+      - key: TOKENIZERS_PARALLELISM
+        value: false
+      - key: PYTORCH_NO_CUDA_MEMORY_CACHING
+        value: "1"  # CUDA 메모리 캐싱 비활성화
+      - key: OMP_NUM_THREADS
+        value: "1"  # OpenMP 스레드 수 제한
+      - key: MKL_NUM_THREADS
+        value: "1"  # MKL 스레드 수 제한
+      - key: NUMEXPR_NUM_THREADS
+        value: "1"  # NumExpr 스레드 수 제한
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"  # OpenBLAS 스레드 수 제한
+      
+      # 추가 메모리 최적화
+      - key: TRANSFORMERS_OFFLINE
+        value: "1"  # 오프라인 모드로 메모리 절약
+      - key: HF_DATASETS_OFFLINE
+        value: "1"  # 데이터셋 오프라인 모드
+      - key: PYTORCH_CUDA_ALLOC_CONF
+        value: max_split_size_mb:8  # 메모리 블록 크기 더욱 줄임
+      - key: PYTHONUNBUFFERED
+        value: "1"  # Python 출력 버퍼링 비활성화
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"  # Python 바이트코드 파일 생성 비활성화
+      
+      # 메모리 할당 최적화
+      - key: PYTORCH_CUDA_ALLOC_CONF
+        value: max_split_size_mb:4  # 메모리 블록 크기 최소화
+      - key: TRANSFORMERS_CACHE
+        value: /tmp/transformers_cache  # 임시 디렉토리 사용
+      - key: HF_HOME
+        value: /tmp/huggingface  # 임시 디렉토리 사용
+      
+      # Python 가비지 컬렉션 최적화
+      - key: PYTHONMALLOC
+        value: malloc  # 메모리 할당자 최적화
+      - key: PYTHONHASHSEED
+        value: "0"  # 해시 시드 고정으로 메모리 안정화
