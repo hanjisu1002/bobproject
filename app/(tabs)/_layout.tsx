@@ -41,6 +41,15 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-circle-outline" color={color} size={size} />,
         }}
       />
+
+      {/* 👇 탭바에는 숨기되, 라우팅 가능하게 */}
+      <Tabs.Screen
+        name="chat"
+        options={{
+          href: null, // expo-router 최신버전
+          // 구버전이면 대신: tabBarButton: () => null
+        }}
+      />
     </Tabs>
   );
 }
