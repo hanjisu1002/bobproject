@@ -17,6 +17,101 @@ except ImportError as e:
     print(f"❌ LLM.Chatbot import 실패: {e}")
     LLM_AVAILABLE = False
 
+# CSV 파일 경로 설정 (LLM 폴더 기준)
+def get_csv_file_paths():
+    """CSV 파일 경로를 LLM 폴더 기준으로 반환"""
+    # LLM 폴더 기준 경로
+    csv_files = [
+        "LLM/food_data_description.csv",
+        "LLM/drink.csv", 
+        "LLM/sidedish.csv"
+    ]
+    
+    # 파일 존재 여부 확인
+    existing_files = []
+    for file_path in csv_files:
+        if os.path.exists(file_path):
+            existing_files.append(file_path)
+            print(f"✅ CSV 파일 발견: {file_path}")
+        else:
+            print(f"❌ CSV 파일 없음: {file_path}")
+    
+    if not existing_files:
+        print("⚠️ 사용 가능한 CSV 파일이 없습니다!")
+        return []
+    
+    print(f"📁 사용할 CSV 파일들: {existing_files}")
+    return existing_files
+
+def get_side_drink_paths():
+    """사이드/음료 CSV 파일 경로 반환"""
+    base_paths = get_csv_file_paths()
+    return [path for path in base_paths if "drink" in path or "sidedish" in path]
+
+# 전역 챗봇 인스턴스
+chatbot: Optional[Chatbot] = None
+
+def initialize_chatbot():
+    """챗봇 초기화"""
+    global chatbot
+    try:
+        print("🤖 챗봇 초기화 시작...")
+        
+        # CSV 파일 경로 가져오기
+        csv_files = get_csv_file_paths()
+        if not csv_files:
+            print("❌ 사용 가능한 CSV 파일이 없어 챗봇 초기화를 건너뜁니다.")
+            return False
+        
+        side_drink_files = get_side_drink_paths()
+        
+        print(f"🥤 사이드/음료 파일들: {side_drink_files}")
+        
+        # 챗봇 인스턴스 생성
+        chatbot = Chatbot(
+            csv_files=csv_files,
+            side_and_drink_files=side_drink_files
+        )
+        
+        print("✅ 챗봇 초기화 성공!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ 챗봇 초기화 실패: {e}")
+        return False
+
+def get_chatbot() -> Optional[Chatbot]:
+    """챗봇 인스턴스 반환"""
+    if chatbot is None:
+        print("⚠️ 챗봇이 초기화되지 않음, 초기화 시도...")
+        if not initialize_chatbot():
+            print("❌ 챗봇 초기화 재시도 실패")
+            return None
+    return chatbot
+
+def chat_with_bot(message: str, user_context: Optional[Dict[str, Any]] = None) -> str:
+    """챗봇과 대화"""
+    bot = get_chatbot()
+    if bot is None:
+        return "죄송합니다. 챗봇을 초기화할 수 없습니다."
+    
+    try:
+        # 사용자 컨텍스트 설정
+        if user_context:
+            if "profile" in user_context:
+                bot.set_user_profile(user_context["profile"])
+            if "current_food" in user_context:
+                # 현재 음식 컨텍스트 설정 로직
+                pass
+        
+        # 챗봇 응답
+        response = bot.ask(message)
+        return response
+        
+    except Exception as e:
+        print(f"❌ 챗봇 응답 오류: {e}")
+        return f"죄송합니다. 오류가 발생했습니다: {str(e)}"
+
 class ChatbotService:
     """챗봇 서비스 클래스"""
     
