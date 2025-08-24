@@ -148,15 +148,15 @@ SYSTEM_PROMPT = """
 class Chatbot:
     """
     배포/서버에서 바로 사용 가능한 형태.
-    - __init__: 모델/임베딩/데이터/RAG 준비
-    - ask(text): 한 턴 입력 → 문자열 응답 반환
+    - __init__: 데이터만 로드, 모델은 지연 로딩
+    - ask(text): 한 턴 입력 → 응답 문자열 반환
     - 상태: current_meal_context, user_profile, consumed_today 보유
     """
     def __init__(
         self,
         csv_files: List[str] = None,
         side_and_drink_files: List[str] = None,
-        model_name: str = "gemini-1.0-pro",  # 가장 가벼운 Gemini 모델
+        model_name: str = "gemini-1.5-flash",  # 사용 가능한 Gemini 모델
         temperature: float = 0.7,
         embed_model: str = "sentence-transformers/paraphrase-MiniLM-L3-v2",  # 가장 가벼운 임베딩 모델
         device: str = "cpu",
@@ -164,47 +164,26 @@ class Chatbot:
     ):
         load_api_key()
 
-        # LLM - 메모리 최적화 강화
-        self.llm = ChatGoogleGenerativeAI(
-            model=model_name, 
-            temperature=temperature,
-            max_output_tokens=512,  # 토큰 수 더 제한
-            max_retries=1  # 재시도 횟수 최소화
-        )
+        # 모델 설정 저장 (지연 로딩용)
+        self._model_name = model_name
+        self._temperature = temperature
+        self._embed_model = embed_model
+        self._device = device
 
-        # Embeddings - 메모리 최적화 강화
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name=embed_model,
-            model_kwargs={"device": device},
-            encode_kwargs={
-                "normalize_embeddings": True,
-                "batch_size": 4  # 배치 크기 더 줄임
-            }
-        )
+        # 모델 인스턴스는 None으로 초기화 (지연 로딩)
+        self._llm = None
+        self._embeddings = None
+        self._retriever = None
+        self._retriever_side_drink = None
+        self._rag_chain = None
 
-        # Data
+        # Data (즉시 로드 - CSV는 가벼움)
         csv_files = csv_files or ["food_data_description.csv", "drink.csv", "sidedish.csv"]
         self.master_df = load_and_normalize_data(csv_files)
         self.FOOD_NAMES: Set[str] = build_food_name_set(self.master_df)
 
         side_and_drink_files = side_and_drink_files or ["sidedish.csv", "drink.csv"]
         self.side_and_drink_df = load_and_normalize_data(side_and_drink_files)
-
-        # Retrievers
-        self.retriever = create_rag_retriever(self.master_df, self.embeddings)
-        self.retriever_side_drink = create_rag_retriever(self.side_and_drink_df, self.embeddings)
-
-        # Prompt/Chain
-        self.rag_prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM_PROMPT + "\n\n[검색된 참고 자료]\n{context}"),
-            ("user", "{question}")
-        ])
-        self.rag_chain = (
-            # Runnable mapping 없이 간단 호출:
-            # context는 retriever.invoke(question)으로 주입
-            # 아래 ask()에서 직접 채워서 사용
-            self.rag_prompt | self.llm | StrOutputParser()
-        )
 
         # 상태
         self.current_meal_context: Optional[dict] = None
@@ -219,26 +198,57 @@ class Chatbot:
         self.what_is_it_triggers = ["이 음식이 뭐야","이 음식 뭐야","지금 음식 뭐야","이게 뭐야","지금 음식","현재 음식","이 음식이 뭔데"]
 
     # ======= 지연 로딩 메서드들 =======
-    # @property 데코레이터 제거 - 원래 방식으로 복원
-    # def llm(self):
-    #     """LLM 모델을 필요할 때만 로드"""
-    #     return self._llm
+    @property
+    def llm(self):
+        """LLM 모델을 필요할 때만 로드"""
+        if self._llm is None:
+            self._llm = ChatGoogleGenerativeAI(
+                model=self._model_name, 
+                temperature=self._temperature,
+                max_output_tokens=256,  # 토큰 수 더 제한
+                max_retries=1,  # 재시도 횟수 최소화
+                convert_system_message_to_human=True  # SystemMessage 호환성 해결
+            )
+        return self._llm
 
-    # def embeddings(self):
-    #     """임베딩 모델을 필요할 때만 로드"""
-    #     return self._embeddings
+    @property
+    def embeddings(self):
+        """임베딩 모델을 필요할 때만 로드"""
+        if self._embeddings is None:
+            self._embeddings = HuggingFaceEmbeddings(
+                model_name=self._embed_model,
+                model_kwargs={"device": self._device},
+                encode_kwargs={
+                    "normalize_embeddings": True,
+                    "batch_size": 2  # 배치 크기 더 줄임
+                }
+            )
+        return self._embeddings
 
-    # def retriever(self):
-    #     """RAG 검색기를 필요할 때만 생성"""
-    #     return self._retriever
+    @property
+    def retriever(self):
+        """RAG 검색기를 필요할 때만 생성"""
+        if self._retriever is None:
+            self._retriever = create_rag_retriever(self.master_df, self.embeddings)
+        return self._retriever
 
-    # def retriever_side_drink(self):
-    #     """사이드/음료 검색기를 필요할 때만 생성"""
-    #     return self._retriever_side_drink
+    @property
+    def retriever_side_drink(self):
+        """사이드/음료 검색기를 필요할 때만 생성"""
+        if self._retriever_side_drink is None:
+            self._retriever_side_drink = create_rag_retriever(self.side_and_drink_df, self.embeddings)
+        return self._retriever_side_drink
 
-    # def rag_chain(self):
-    #     """RAG 체인을 필요할 때만 생성"""
-    #     return self._rag_chain
+    @property
+    def rag_chain(self):
+        """RAG 체인을 필요할 때만 생성"""
+        if self._rag_chain is None:
+            rag_prompt = ChatPromptTemplate.from_messages([
+                ("system", SYSTEM_PROMPT + "\n\n[검색된 참고 자료]\n{context}"),
+                ("user", "{question}")
+            ])
+            self._rag_chain = rag_prompt | self.llm | StrOutputParser()
+        return self._rag_chain
 
     # ======= 공개 API =======
     def ask(self, user_input: str) -> str:

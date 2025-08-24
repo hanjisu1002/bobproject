@@ -1,65 +1,51 @@
-# 프로젝트 루트에서
-# (Expo가 버전에 맞는 호환 패키지를 자동으로 설치합니다)
-
-# 상태 저장
-# npx expo install @react-native-async-storage/async-storage
-
-# 이미지(앨범/카메라)
-# npx expo install expo-image-picker
-
-# 그라디언트 헤더
-# npx expo install expo-linear-gradient
-
-# 진행 링(SVG)
-# npx expo install react-native-svg
-
-# 머티리얼 컴포넌트
-# npm i react-native-paper
-# (Expo SDK 53 기준 정상 동작)
-
-# 캘린더(기록 탭)
-# npm i react-native-calendars
-
-# backend
+# 핵심 웹 프레임워크
 fastapi==0.111.0
 uvicorn==0.30.1
 pydantic==2.8.2
 sqlalchemy==2.0.32
 python-multipart==0.0.9
-pandas
-pydantic-settings
-passlib[bcrypt]>=1.7.4
-PyJWT
-psycopg2-binary
+pandas>=1.26.0
+pydantic-settings>=2.0.0
 
-# Core - Python 3.13+ 호환 버전으로 업데이트
+# 인증 및 보안
+passlib[bcrypt]>=1.7.4
+PyJWT>=2.0.0
+psycopg2-binary>=2.9.0
+
+# 기본 데이터 처리
 numpy>=1.26.0
 pillow>=10.3.0
 
-# ONNX Runtime (CPU 전용)
-onnxruntime>=1.18.0
+# 메모리 모니터링
+psutil>=5.9.0,<6.0.0  # 메모리 사용량 모니터링
 
-# YOLOv8 (ONNX 추론 지원 포함)
-ultralytics>=8.2.0
+# AI 모델 (메모리 최적화)
+onnxruntime>=1.18.0,<1.19.0  # 버전 제한으로 메모리 안정화
+ultralytics>=8.2.0,<8.4.0    # 버전 제한으로 메모리 안정화
 
-# Torch & CLIP - 최신 버전으로 업데이트 (Python 3.13+ 호환)
-torch>=2.5.0
-open-clip-torch>=2.24.0
-huggingface_hub>=0.23.0
-safetensors>=0.4.2
+# Torch & CLIP (메모리 최적화)
+torch>=2.5.0,<2.6.0          # 버전 제한으로 메모리 안정화
+open-clip-torch>=2.24.0,<2.25.0  # 버전 제한으로 메모리 안정화
+huggingface_hub>=0.23.0,<0.25.0  # 버전 제한으로 메모리 안정화
+safetensors>=0.4.2,<0.5.0    # 버전 제한으로 메모리 안정화
 
-# LLM & LangChain 관련 패키지 (메모리 최적화)
-langchain>=0.1.0
-langchain-community>=0.0.38
-langchain-google-genai>=0.0.5,<0.1.0  # 안정적인 0.0.x 버전 # 실제 존재하는 0.0.x 버전
+# LLM & LangChain (메모리 최적화)
+langchain>=0.1.0,<0.2.0      # 안정적인 버전
+langchain-community>=0.0.38,<0.1.0  # 안정적인 버전
+langchain-google-genai>=0.0.5,<0.1.0  # 안정적인 버전
 google-generativeai>=0.3.0,<0.4.0  # 안정적인 버전
-faiss-cpu>=1.7.0,<1.8.0
 
-transformers==4.40.2
-tokenizers==0.19.1
-sentence-transformers==2.6.1
-langchain-huggingface==0.0.1
-regex==2023.12.25
+# 벡터 DB (메모리 최적화)
+faiss-cpu>=1.7.0,<1.8.0      # 버전 제한으로 메모리 안정화
+sentence-transformers>=2.6.0,<2.7.0  # 버전 제한으로 메모리 안정화
+
+# Transformers (메모리 최적화)
+transformers>=4.40.0,<4.41.0  # 안정적인 버전
+tokenizers>=0.19.1,<0.20.0    # 버전 제한으로 메모리 안정화
+langchain-huggingface>=0.0.1,<0.0.4  # 안정적인 버전
+
+# 정규표현식
+regex>=2023.12.25,<2024.0.0  # 버전 제한으로 메모리 안정화
+
 # 메모리 최적화 (Python 3.11 호환)
-# langchain-huggingface와 호환되는 최신 버전
 # torch-cpu는 Python 3.13에서 지원되지 않음 - CPU 전용 PyTorch는 자동으로 설치됨
