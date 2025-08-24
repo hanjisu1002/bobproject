@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, recognize, food_log, chatbot
 from app.db.session import init_db
+from app.core.catalog import Catalog # Add this import
 
 # 로깅 기본 설정 (원하면 settings로 조절)
 logging.basicConfig(
@@ -31,6 +32,10 @@ else:
     # 운영에선 특정 도메인만 허용하는 것을 권장
     origins = ["*"]
 
+# Add http://localhost:8081 for local development
+if "http://localhost:8081" not in origins:
+    origins.append("http://localhost:8081")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -45,6 +50,7 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup():
     init_db()  # 실패해도 앱은 뜬다 (로그 확인)
+    app.state.catalog = Catalog() # Initialize and attach the Catalog
     log.info(f"[Startup] API is starting on port {PORT} with origins={origins}")
 
 
@@ -232,4 +238,3 @@ async function reco(){
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
-

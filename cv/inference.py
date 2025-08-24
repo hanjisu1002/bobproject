@@ -11,12 +11,16 @@ import dataclasses
 import hashlib
 import threading
 from typing import Optional, Tuple, List, Dict, Any
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
 import onnxruntime as ort
 from ultralytics import YOLO
 import torch, open_clip
+
+# --------- 기본 경로 (이 파일의 위치 기준) ---------
+CV_DIR = Path(__file__).parent.resolve()
 
 # --------- 분류 전처리 기본값 (ImageNet 스타일) ---------
 CLS_IMG_SIZE = 256
@@ -223,9 +227,9 @@ def build_or_load_clip(class_names: List[str], cfg) -> tuple:
 @dataclasses.dataclass
 class InferenceConfig:
     # Paths
-    det_onnx: str = "onnx_models/best.onnx"
-    cls_onnx: str = "onnx_models/food_cls.onnx"
-    classes_json: str = "data/class_names.json"
+    det_onnx: str = ""
+    cls_onnx: str = ""
+    classes_json: str = ""
 
     # Detection (Ultralytics가 처리)
     det_conf: float = 0.15
@@ -241,7 +245,7 @@ class InferenceConfig:
     use_text_ensemble: bool = True
     alpha: float = 0.10   # final = (1-a)*cls + a*clip
     tau: float = 0.20
-    clip_cache: str = "cache/clip_text_feat_vitb32_ens.npz"
+    clip_cache: str = ""
     device: str = "cpu"
 
     # Output
@@ -464,12 +468,12 @@ def _get_runner() -> InferenceRunner:
         with _lock:
             if _runner_singleton is None:
                 cfg = InferenceConfig(
-                    det_onnx="onnx_models/best.onnx",
-                    cls_onnx="onnx_models/food_cls.onnx",
-                    classes_json="data/class_names.json",
+                    det_onnx=str(CV_DIR / "onnx_models/best.onnx"),
+                    cls_onnx=str(CV_DIR / "onnx_models/food_cls.onnx"),
+                    classes_json=str(CV_DIR / "data/class_names.json"),
                     det_conf=0.15, det_iou=0.50, det_max=2, imgsz=640, agnostic_nms=True,
                     use_clip=True, use_text_ensemble=True,
-                    clip_cache="cache/clip_text_feat_vitb32_ens.npz",
+                    clip_cache=str(CV_DIR / "cache/clip_text_feat_vitb32_ens.npz"),
                     alpha=0.10, tau=0.20, device="cpu",
                     topk=5,
                 )

@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, List
 from datetime import datetime
+from app.schemas.nutrition import Nutrition # Import Nutrition schema
 
 class MenuBase(BaseModel):
     food_code: str
@@ -24,3 +25,8 @@ class Menu(MenuBase):
 
     class Config:
         from_attributes = True
+
+# New schema for Menu with Nutrition
+class MenuWithNutrition(Menu): # Inherit from Menu
+    kcal: Optional[float] = None
+    macro: Optional[Dict[str, float]] = None # {carb_g: float, protein_g: float, fat_g: float}
