@@ -161,25 +161,23 @@ export default function Home() {
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
       {/* 히어로 헤더 */}
       <View style={{ paddingHorizontal: space(2), paddingTop: space(1) }}>
-        <LinearGradient
-          colors={[palette.primary, palette.primaryDark]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <View
           style={{
+            backgroundColor: palette.primary,
             borderRadius: radius.xl,
             paddingVertical: space(3),
             paddingHorizontal: space(3),
           }}
         >
           <Text style={{ color: "white", fontSize: 22, fontWeight: "800" }}>
-            오늘의 추천 메뉴
+            BOBZIP의 추천 메뉴
           </Text>
           <Text style={{ color: "white", opacity: 0.9, marginTop: 6 }}>
             {profile?.daily_kcal_goal
               ? `목표 ${profile.daily_kcal_goal} kcal • 탄수화물 ${profile.macro_ratio?.carb_g ?? 50}g / 단백질 ${profile.macro_ratio?.protein_g ?? 25}g / 지방 ${profile.macro_ratio?.fat_g ?? 25}g`
               : "목표를 설정하면 더 정확히 추천해줘요"}
           </Text>
-        </LinearGradient>
+        </View>
       </View>
 
       {/* 카테고리 칩 */}

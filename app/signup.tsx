@@ -126,9 +126,8 @@ export default function Signup() {
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
       {/* 헤더 */}
       <View>
-        <LinearGradient
-          colors={[palette.primary, palette.primaryDark]}
-          style={{ height: 96, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
+        <View
+          style={{ backgroundColor: palette.primary, height: 96, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
         />
         <IconButton
           icon="arrow-left"

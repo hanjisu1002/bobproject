@@ -55,9 +55,8 @@ export default function Login() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
       <View>
-        <LinearGradient
-          colors={[palette.primary, palette.primaryDark]}
-          style={{ height: 96, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
+        <View
+          style={{ backgroundColor: palette.primary, height: 96, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
         />
         <Text
           style={{

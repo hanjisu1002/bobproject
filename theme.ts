@@ -2,8 +2,8 @@
 import { configureFonts, MD3LightTheme, MD3Theme } from "react-native-paper";
 
 export const palette = {
-  primary: "#F97316",
-  primaryDark: "#C2410C",
+  primary: "#92bc3d",
+  primaryDark: "#3c5949",
   bg: "#F6F7FB",
   card: "#FFFFFF",
   text: "#111827",

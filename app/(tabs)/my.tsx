@@ -212,7 +212,7 @@ export default function My() {
                     </Text>
                   </View>
                   <Text style={{ marginTop: 6 }}>
-                    {(today?.totalKcal ?? 0)} / {(profile?.daily_kcal_goal ?? "-")} kcal {/* Updated field name */}
+                    {Math.round(today?.totalKcal ?? 0)} / {(profile?.daily_kcal_goal ?? "-")} kcal {/* Updated field name */}
                   </Text>
                   <Button
                     mode="outlined"
@@ -263,7 +263,7 @@ export default function My() {
                 <Divider style={{ marginVertical: 8 }} />
 
                 <Text style={{ fontWeight: "700" }}>오늘 요약</Text>
-                <Text>섭취 합계: {today?.totalKcal ?? 0} kcal (기록 {today?.items.length ?? 0}건)</Text>
+                <Text>섭취 합계: {Math.round(today?.totalKcal ?? 0)} kcal (기록 {today?.items.length ?? 0}건)</Text>
 
 
                 {/* 액션 버튼: 줄바꿈 허용 */}
