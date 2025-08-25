@@ -26,24 +26,21 @@ app = FastAPI(title=settings.APP_NAME)
 # CORS
 # ---------------------------
 """
-CORS 설정
-- credentials(True) 사용 시 wildcard '*' 금지 → 정확한 도메인만 허용
-- Vercel 프리뷰 도메인 허용을 위해 정규식 추가
+CORS 설정 (쿠키 미사용 가정 → credentials=False)
+- 정확한 도메인 화이트리스트만 허용
+- Vercel 프리뷰 서브도메인 허용을 위해 정규식 추가 가능
 """
-default_allowed = [
-    "http://localhost:3000",
-    "http://localhost:8081",
-    "http://localhost:19006",
+ALLOWED = [
+    "https://yonsei-bob-zip.vercel.app",  # 프로덕션 프론트
+    "http://localhost:8081",               # 로컬(웹/Expo web)
 ]
 if settings.ALLOWED_ORIGINS:
     origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-    # 로컬 편의 도메인 보강
-    for o in default_allowed:
+    for o in ALLOWED:
         if o not in origins:
             origins.append(o)
 else:
-    # 명시적 기본 허용 목록(와일드카드 금지)
-    origins = default_allowed
+    origins = ALLOWED
 
 vercel_preview_regex = r"^https://.*\\.vercel\\.app$"
 
@@ -51,9 +48,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_origin_regex=vercel_preview_regex,
-    allow_credentials=True,  # 프론트에서 withCredentials/쿠키 사용 시 True 필요
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_credentials=False,  # 쿠키 미사용 시 False (와일드카드/간단화 가능)
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ---------------------------
