@@ -45,26 +45,50 @@ app.add_middleware(
 )
 
 # ---------------------------
-# 스타트업: DB 초기화 (재시도 포함)
+# 스타트업: DB 초기화 (재시도 포함) - 메모리 최적화
 # ---------------------------
 @app.on_event("startup")
-def _startup():
-    init_db()  # 실패해도 앱은 뜬다 (로그 확인)
-    app.state.catalog = Catalog() # Initialize and attach the Catalog
+async def _startup():
     log.info(f"[Startup] API is starting on port {PORT} with origins={origins}")
-
+    
+    # DB 초기화 (필수)
+    try:
+        init_db()
+        log.info("[Startup] Database initialized successfully")
+    except Exception as e:
+        log.error(f"[Startup] Database initialization failed: {e}")
+        # DB 실패해도 앱은 뜬다 (로그 확인)
+    
+    # 카탈로그는 지연 로딩으로 변경 (메모리 절약)
+    log.info("[Startup] Catalog will be loaded on first request (lazy loading)")
+    
+    log.info("[Startup] API startup completed")
 
 # ---------------------------
-# 라우터
+# 카탈로그 지연 로딩 함수
 # ---------------------------
+def get_catalog():
+    """카탈로그를 필요할 때만 로딩 (메모리 절약)"""
+    if not hasattr(app.state, 'catalog'):
+        log.info("[Lazy Loading] Initializing Catalog...")
+        app.state.catalog = Catalog()
+        log.info("[Lazy Loading] Catalog initialized")
+    return app.state.catalog
+
+# ---------------------------
+# 라우터 등록 (메모리 최적화)
+# ---------------------------
+# 기본 라우터 (즉시 로딩)
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["auth"])
 app.include_router(me.router, prefix=f"{settings.API_PREFIX}/me", tags=["me"])
 app.include_router(menu.router, prefix=f"{settings.API_PREFIX}", tags=["menu"])
 app.include_router(recommend.router, prefix=f"{settings.API_PREFIX}", tags=["recommendations"])
-app.include_router(vision.router, prefix=f"{settings.API_PREFIX}", tags=["vision"])
 app.include_router(food_log.router, prefix=f"{settings.API_PREFIX}", tags=["food_logs"])
-app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}", tags=["chatbot"])
+
+# CV 및 LLM 라우터 (지연 로딩으로 처리)
+app.include_router(recognize.router, prefix=f"{settings.API_PREFIX}", tags=["recognize"])
+app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}/chatbot", tags=["chatbot"])
 
 # ---------------------------
 # 간단한 루트 페이지
