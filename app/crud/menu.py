@@ -3,6 +3,7 @@ from app.models.menu import Menu
 from app.models.nutrition import Nutrition
 from app.schemas.menu import MenuCreate, MenuUpdate
 from app.schemas.nutrition import NutritionCreate, NutritionUpdate
+from sqlalchemy import or_ # Need to import or_ for search_by_name
 
 def get_menu(db: Session, menu_id: int):
     return db.query(Menu).filter(Menu.menu_id == menu_id).first()
@@ -35,6 +36,15 @@ def delete_menu(db: Session, menu_id: int):
         db.delete(db_menu)
         db.commit()
     return db_menu
+
+# New functions to add
+def get_by_name(db: Session, name: str):
+    return db.query(Menu).filter(Menu.std_name == name).first()
+
+def search_by_name(db: Session, query: str, skip: int = 0, limit: int = 100):
+    return db.query(Menu).filter(
+        Menu.std_name.ilike(f"%{query}%")
+    ).offset(skip).limit(limit).all()
 
 # Nutrition CRUD operations
 

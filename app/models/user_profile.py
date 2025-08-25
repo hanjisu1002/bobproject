@@ -7,6 +7,8 @@ class UserProfile(Base):
     __tablename__ = "user_profile"
 
     user_id = Column(Integer, ForeignKey('user.user_id', ondelete='CASCADE'), primary_key=True)
+    sex = Column(Text, nullable=True) # 성별 필드 추가
+    age = Column(Integer, nullable=True) # 나이 필드 추가
     daily_kcal_target = Column(Integer)
     macro_json = Column(Text)  # JSON string
     activity_level = Column(Text)

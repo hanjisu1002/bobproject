@@ -1,47 +1,49 @@
+// api.ts
 import axios from 'axios';
-import { loadJSON } from './storage'; // loadJSON import 추가
+import { loadJSON } from './storage';
 
-// 기존 백엔드 API 설정
-const API_BASE_URL = 'https://bobproject-server.onrender.com/v1';
+// 항상 EXPO_PUBLIC_API_BASE가 최우선, 없으면 프로덕션 기본값 사용
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE?.trim() ||
+  'https://bobproject-server.onrender.com/v1';
+
+console.log('[API] baseURL =', API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true,  // 쿠키 포함 (CORS credentials)
+  withCredentials: false, // 쿠키 미사용 → false
 });
 
-// 요청 인터셉터: 토큰 자동 추가
+// 토큰 자동 주입
 api.interceptors.request.use(async (config) => {
-  const token = await loadJSON<string | null>("token", null); // 토큰 로드
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  const token = await loadJSON<string | null>('token', null);
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// 기존 타입 정의
-export type Box = { x:number; y:number; w:number; h:number; label?:string; score?:number };
+// ===== 타입들 (화면에서 쓰면 유지) =====
+export type Box = { x: number; y: number; w: number; h: number; label?: string; score?: number };
 
 export type InferenceResp = {
   imageUrl: string;
   boxes: Box[];
-  menuCandidates: Array<{ name:string; score:number }>;
+  menuCandidates: Array<{ name: string; score: number }>;
   nutrition: {
+    menu_id: number;
     name: string;
     kcal: number;
-    macro: { carb:number; protein:number; fat:number };
+    macro: { carb: number; protein: number; fat: number };
     allergens: string[];
   }[];
 };
 
-// 백엔드 API 함수들
+// ===== Auth / User / Menu / Recommend =====
 export const authAPI = {
-  signup: (email: string, password: string) =>
-    api.post('/auth/signup', { email, password }),
+  signup: (name: string, email: string, password: string) =>
+    api.post('/auth/signup', { name, email, password }),
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
+  logout: () => api.post('/auth/logout'),
 };
 
 export const userAPI = {
@@ -49,6 +51,7 @@ export const userAPI = {
   updateProfile: (data: any) => api.put('/me/profile', data),
   getPreferences: () => api.get('/me/preferences'),
   updatePreferences: (data: any) => api.put('/me/preferences', data),
+  deleteMe: () => api.delete('/me'),
 };
 
 export const menuAPI = {
@@ -58,6 +61,10 @@ export const menuAPI = {
   searchMenu: (query: string) => api.get('/menu/search', { params: { q: query } }),
   getSimilarMenu: (id: string, k?: number) =>
     api.get(`/menu/${id}/similar`, { params: { k } }),
+  getMenuCategories: () => api.get('/menu/categories'),
+  // 한글/공백 안전: params 사용 → 자동 인코딩
+  getMenusByCategory: (category: string) =>
+    api.get('/menu/by_category', { params: { category } }),
 };
 
 export const recommendAPI = {
@@ -65,23 +72,51 @@ export const recommendAPI = {
     api.get('/recommendations', { params: { kcal_max } }),
 };
 
-// 데모용: 가짜 응답. 추후 fetch(...)로 교체하면 됨.
+// ✅ 챗봇: 최종 경로는 /v1/chat (백엔드 라우터가 /chat로 등록되어 있음)
+export const chatbotAPI = {
+  chat: (message: string, user_id: string) =>
+    api.post('/chat', { message, user_context: { user_id } }),
+};
+
+// ✅ 이미지 인식: 멀티파트 업로드 → 서버의 List[MenuWithNutrition]를 화면 타입으로 변환
 export async function apiInfer(form: FormData): Promise<InferenceResp> {
-  await new Promise(r => setTimeout(r, 600)); // 로딩 느낌
+  const res = await api.post('/vision/recognize-food', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+
+  // 백엔드 반환 예: [{ menu_id, std_name, kcal, macro, allergens }]
+  const backend_menus: Array<{
+    menu_id: number;
+    std_name: string;
+    kcal?: number;
+    macro?: { carb?: number; protein?: number; fat?: number } | null;
+    allergens?: string[] | null;
+  }> = res.data ?? [];
+
+  const menuCandidates = backend_menus.map((m, i) => ({
+    name: m.std_name,
+    score: Math.max(0, 1 - i * 0.1), // 임시 스코어
+  }));
+
+  const nutrition = backend_menus.map((m) => ({
+    menu_id: m.menu_id,
+    name: m.std_name,
+    kcal: m.kcal ?? 0,
+    macro: {
+      carb: m.macro?.carb ?? 0,
+      protein: m.macro?.protein ?? 0,
+      fat: m.macro?.fat ?? 0,
+    },
+    allergens: m.allergens ?? [],
+  }));
+
+  const primary = menuCandidates[0]?.name ?? '인식된 음식';
+
   return {
-    imageUrl: "local-selected",
-    boxes: [{ x:0.08, y:0.12, w:0.84, h:0.6, label:"불고기덮밥", score:0.92 }],
-    menuCandidates: [
-      { name:"불고기덮밥", score:0.92 },
-      { name:"소불고기정식", score:0.73 },
-      { name:"돼지불고기덮밥", score:0.61 },
-    ],
-    nutrition: [{
-      name:"불고기덮밥",
-      kcal: 620,
-      macro: { carb:85, protein:23, fat:15 },
-      allergens:["대두","밀","계란"]
-    }]
+    imageUrl: 'local-selected', // 필요 시 서버 URL로 교체
+    boxes: [{ x: 0.08, y: 0.12, w: 0.84, h: 0.6, label: primary, score: 0.92 }],
+    menuCandidates,
+    nutrition,
   };
 }
 

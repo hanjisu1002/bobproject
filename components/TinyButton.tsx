@@ -1,6 +1,7 @@
 // components/TinyButton.tsx
 import React from "react";
 import { Pressable, Text } from "react-native";
+import { palette } from "../theme"; // Import palette
 
 type Props = {
   title: string;
@@ -22,7 +23,7 @@ export default function TinyButton({
       onPress={disabled ? undefined : onPress}
       style={({ pressed }) => ({
         backgroundColor: primary
-          ? (pressed ? "#6D28D9" : "#7C3AED") // 보라 실버튼
+          ? (pressed ? palette.primaryDark : palette.primary) // Use palette colors
           : outline
           ? (pressed ? "#F3F4F6" : "#FFFFFF") // 아웃라인 기본
           : (pressed ? "#EDE9FE" : "#F5F3FF"),
@@ -36,7 +37,7 @@ export default function TinyButton({
     >
       <Text
         style={{
-          color: primary ? "#FFFFFF" : (outline ? "#6D28D9" : "#4B5563"),
+          color: primary ? "#FFFFFF" : (outline ? palette.primary : "#4B5563"), // Use palette.primary for outline text
           fontWeight: "700",
           fontSize: 15,
         }}

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 
 class SignUpRequest(BaseModel):
+    name: str # 이름 필드 추가
     email: EmailStr
     password: str
 

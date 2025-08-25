@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Response 
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.core.config import settings
-from app.api.routers import health, auth, me, menu, recommend, recognize, food_log, chatbot
+from app.api.routers import health, auth, me, menu, recommend, vision, food_log, chatbot
 from app.db.session import init_db
+from app.core.catalog import Catalog # Add this import
 
 # 로깅 기본 설정 (원하면 settings로 조절)
 logging.basicConfig(
@@ -18,46 +18,103 @@ log = logging.getLogger("app")
 
 # Render가 주는 포트 (로컬 기본 8000)
 PORT = int(os.environ.get("PORT", 8000))
-
 app = FastAPI(title=settings.APP_NAME)
+
 
 # ---------------------------
 # CORS
 # ---------------------------
-# settings.ALLOWED_ORIGINS = "https://front.vercel.app,https://mydomain.com" 형태 권장
+"""
+프론트에서 withCredentials: true 를 사용하므로(로그에 명시), 
+서버는 allow_credentials=True 가 필요하고,
+allow_origins 에 정확한 오리진(와일드카드 X)을 넣어야 한다.
+"""
+ALLOWED = [
+    "https://yonsei-bob-zip.vercel.app",
+    "https://bobproject-gules.vercel.app",
+    "http://localhost:8081",
+    "http://localhost:5173",
+]
+
 if settings.ALLOWED_ORIGINS:
     origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+    for o in ALLOWED:
+        if o not in origins:
+            origins.append(o)
 else:
-    # 운영에선 특정 도메인만 허용하는 것을 권장
-    origins = ["*"]
+    origins = ALLOWED
+
+
+# (선택) vercel 프리뷰 전체 허용: https://*.vercel.app
+vercel_preview_regex = r"^https://.*\.vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_origins=origins,                 # 필요하면 * 도 가능 (credentials=False일 때)
+    # allow_origin_regex=vercel_preview_regex,  # 프리뷰 전부 허용하고 싶으면 유지
+    allow_credentials=False,               # <-- 쿠키 안 쓰므로 False
+    allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
+    allow_headers=["*"],                   # Authorization 포함
+    expose_headers=["set-cookie"],       # 쿠키 안 쓰면 굳이 노출할 필요 없음 -> 제거
 )
 
+# --- 루트/헬스체크 (HEAD 허용) ---
+@app.get("/", include_in_schema=False)
+def root():
+    return {"ok": True, "service": "smartbite-api"}
+
+@app.head("/", include_in_schema=False)
+def root_head():
+    return Response(status_code=200)
+
+@app.get("/ping", include_in_schema=False)
+def ping():
+    return {"ok": True}
+
 # ---------------------------
-# 스타트업: DB 초기화 (재시도 포함)
+# 스타트업: DB 초기화 (재시도 포함) - 메모리 최적화
 # ---------------------------
 @app.on_event("startup")
-def _startup():
-    init_db()  # 실패해도 앱은 뜬다 (로그 확인)
+async def _startup():
     log.info(f"[Startup] API is starting on port {PORT} with origins={origins}")
-
+    
+    # DB 초기화 (필수)
+    try:
+        init_db()
+        log.info("[Startup] Database initialized successfully")
+    except Exception as e:
+        log.error(f"[Startup] Database initialization failed: {e}")
+        # DB 실패해도 앱은 뜬다 (로그 확인)
+    
+    # 카탈로그는 지연 로딩으로 변경 (메모리 절약)
+    log.info("[Startup] Catalog will be loaded on first request (lazy loading)")
+    
+    log.info("[Startup] API startup completed")
 
 # ---------------------------
-# 라우터
+# 카탈로그 지연 로딩 함수
 # ---------------------------
+def get_catalog():
+    """카탈로그를 필요할 때만 로딩 (메모리 절약)"""
+    if not hasattr(app.state, 'catalog'):
+        log.info("[Lazy Loading] Initializing Catalog...")
+        app.state.catalog = Catalog()
+        log.info("[Lazy Loading] Catalog initialized")
+    return app.state.catalog
+
+# ---------------------------
+# 라우터 등록 (메모리 최적화)
+# ---------------------------
+# 기본 라우터 (즉시 로딩)
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["auth"])
 app.include_router(me.router, prefix=f"{settings.API_PREFIX}/me", tags=["me"])
 app.include_router(menu.router, prefix=f"{settings.API_PREFIX}", tags=["menu"])
 app.include_router(recommend.router, prefix=f"{settings.API_PREFIX}", tags=["recommendations"])
-app.include_router(recognize.router, prefix=f"{settings.API_PREFIX}", tags=["recognize"])
 app.include_router(food_log.router, prefix=f"{settings.API_PREFIX}", tags=["food_logs"])
+
+# CV 및 LLM 라우터 (지연 로딩으로 처리)
+app.include_router(vision.router, prefix=f"{settings.API_PREFIX}", tags=["vision"])
 app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}/chatbot", tags=["chatbot"])
 
 # ---------------------------
@@ -65,8 +122,8 @@ app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}/chatbot", tags
 # ---------------------------
 from fastapi.responses import HTMLResponse
 
-@app.get("/", response_class=HTMLResponse)
-def index():
+@app.get("/quicktest", response_class=HTMLResponse, include_in_schema=False)
+def quicktest():
     return """
 <!doctype html>
 <html lang="ko">
@@ -232,4 +289,3 @@ async function reco(){
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
-

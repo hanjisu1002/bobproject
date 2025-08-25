@@ -6,18 +6,62 @@ from typing import Dict, Any, Optional
 
 class Catalog:
     def __init__(self):
-        self.menu_df = pd.read_csv(settings.FOODS_CSV)
-        self.nutrition_df = pd.read_csv(settings.NUTRIENTS_CSV)
-        self.menu_by_id: Dict[int, Dict[str, Any]] = self.menu_df.set_index('menu_id').to_dict(orient='index')
-        self.nutrition_by_food_code: Dict[str, Dict[str, Any]] = self.nutrition_df.set_index('food_code').to_dict(orient='index')
+        # 지연 로딩을 위한 초기화 지연
+        self._menu_df = None
+        self._nutrition_df = None
+        self._menu_by_id = None
+        self._nutrition_by_food_code = None
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """필요할 때만 데이터 로딩 (메모리 절약)"""
+        if not self._initialized:
+            print("🔄 Catalog 데이터 로딩 중...")
+            try:
+                self._menu_df = pd.read_csv(settings.FOODS_CSV)
+                self._nutrition_df = pd.read_csv(settings.NUTRIENTS_CSV)
+                self._menu_by_id = self._menu_df.set_index('food_code').to_dict(orient='index')
+                self._nutrition_by_food_code = self._nutrition_df.set_index('food_code').to_dict(orient='index')
+                self._initialized = True
+                print("✅ Catalog 데이터 로딩 완료")
+            except Exception as e:
+                print(f"❌ Catalog 데이터 로딩 실패: {e}")
+                # 기본값 설정
+                self._menu_df = pd.DataFrame()
+                self._nutrition_df = pd.DataFrame()
+                self._menu_by_id = {}
+                self._nutrition_by_food_code = {}
+                self._initialized = True
+
+    @property
+    def menu_df(self):
+        self._ensure_initialized()
+        return self._menu_df
+
+    @property
+    def nutrition_df(self):
+        self._ensure_initialized()
+        return self._nutrition_df
+
+    @property
+    def menu_by_id(self):
+        self._ensure_initialized()
+        return self._menu_by_id
+
+    @property
+    def nutrition_by_food_code(self):
+        self._ensure_initialized()
+        return self._nutrition_by_food_code
 
     def get_nutrition_scaled(self, menu_id: int, portion_g: Optional[float] = None) -> Optional[Dict[str, float]]:
-        menu_item = self.menu_by_id.get(menu_id)
+        self._ensure_initialized()
+        
+        menu_item = self._menu_by_id.get(menu_id)
         if not menu_item:
             return None
 
         food_code = menu_item.get('food_code')
-        nutrition_data = self.nutrition_by_food_code.get(food_code)
+        nutrition_data = self._nutrition_by_food_code.get(food_code)
 
         if not nutrition_data:
             return None

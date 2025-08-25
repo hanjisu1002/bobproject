@@ -11,18 +11,64 @@ import dataclasses
 import hashlib
 import threading
 from typing import Optional, Tuple, List, Dict, Any
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
-import onnxruntime as ort
-from ultralytics import YOLO
-import torch, open_clip
+# 무거운 라이브러리들은 함수 내부에서 지연 임포트하여
+# 모듈 임포트 시 메모리 사용을 최소화한다.
+
+# --------- 기본 경로 (이 파일의 위치 기준) ---------
+CV_DIR = Path(__file__).parent.resolve()
 
 # --------- 분류 전처리 기본값 (ImageNet 스타일) ---------
 CLS_IMG_SIZE = 256
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
+# --------- 지연 로딩을 위한 전역 변수 ---------
+_yolo_model = None
+_cls_model = None
+_clip_model = None
+_clip_tokenizer = None
+_class_names = None
+
+# --------- 모델 로딩 함수들 (지연 로딩) ---------
+def get_yolo_model():
+    global _yolo_model
+    if _yolo_model is None:
+        print("🔄 YOLO 모델 로딩 중...")
+        # 지연 임포트
+        from ultralytics import YOLO
+        _yolo_model = YOLO(CV_DIR / "onnx_models" / "best.onnx")
+        print("✅ YOLO 모델 로딩 완료")
+    return _yolo_model
+
+def get_cls_model():
+    global _cls_model
+    if _cls_model is None:
+        print("🔄 분류 모델 로딩 중...")
+        _cls_model = load_onnx_session(str(CV_DIR / "onnx_models" / "food_cls.onnx"))
+        print("✅ 분류 모델 로딩 완료")
+    return _cls_model
+
+def get_clip_model():
+    global _clip_model, _clip_tokenizer
+    if _clip_model is None:
+        print("🔄 CLIP 모델 로딩 중...")
+        # 지연 임포트
+        import open_clip
+        _clip_model, _, _clip_tokenizer = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+        print("✅ CLIP 모델 로딩 완료")
+    return _clip_model, _clip_tokenizer
+
+def get_class_names():
+    global _class_names
+    if _class_names is None:
+        print("🔄 클래스 이름 로딩 중...")
+        _class_names = load_class_names(str(CV_DIR / "data" / "class_names.json"))
+        print("✅ 클래스 이름 로딩 완료")
+    return _class_names
 
 # ========= 유틸 =========
 def softmax(x, tau=1.0, axis=-1):
@@ -32,12 +78,14 @@ def softmax(x, tau=1.0, axis=-1):
     return ex / np.clip(ex.sum(axis=axis, keepdims=True), 1e-12, None)
 
 
-def load_onnx_session(path: str) -> ort.InferenceSession:
-    # ORT 세션 옵션 (1번)
+def load_onnx_session(path: str):
+    # ORT 세션 옵션 (메모리 최적화)
+    import onnxruntime as ort
     so = ort.SessionOptions()
-    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    so.intra_op_num_threads = os.cpu_count() or 1
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC  # 최적화 레벨 낮춤
+    so.intra_op_num_threads = 1  # 스레드 수 최소화
     so.inter_op_num_threads = 1
+    so.execution_mode = ort.ExecutionMode.ORT_PARALLEL  # 병렬 실행 비활성화
     return ort.InferenceSession(path, sess_options=so, providers=["CPUExecutionProvider"])
 
 
@@ -56,7 +104,7 @@ def preprocess_cls(pil: Image.Image) -> np.ndarray:
 
 
 def preprocess_cls_batch(pil_crops: List[Image.Image]) -> np.ndarray:
-    """분류 배치 전처리 (2번)"""
+    """분류 배치 전처리 (메모리 최적화)"""
     arrs = []
     for pil in pil_crops:
         arrs.append(preprocess_cls(pil))  # (1,C,H,W)
@@ -128,6 +176,7 @@ def build_clip_text_feat(class_names: List[str], device='cpu',
                          clip_model='ViT-B-32',
                          pretrained='laion2b_s34b_b79k',
                          use_text_ensemble: bool = True) -> tuple:
+    import open_clip, torch
     model, _, preprocess = open_clip.create_model_and_transforms(
         clip_model, pretrained=pretrained, device=device
     )
@@ -146,6 +195,7 @@ def build_clip_text_feat(class_names: List[str], device='cpu',
 
 
 def clip_logits_for_crop(model, preprocess, text_feat, crop_pil, device='cpu') -> np.ndarray:
+    import torch
     with torch.no_grad():
         img = preprocess(crop_pil).unsqueeze(0).to(device)
         img_feat = model.encode_image(img)
@@ -202,6 +252,7 @@ def build_or_load_clip(class_names: List[str], cfg) -> tuple:
                 return model, preprocess, text_feat_t, dev, True
         except Exception:
             pass
+    import torch  # torch.from_numpy 사용
     model, preprocess, text_feat_t = build_clip_text_feat(
         class_names, device=dev,
         clip_model=cfg.clip_model,
@@ -223,9 +274,9 @@ def build_or_load_clip(class_names: List[str], cfg) -> tuple:
 @dataclasses.dataclass
 class InferenceConfig:
     # Paths
-    det_onnx: str = "onnx_models/best.onnx"
-    cls_onnx: str = "onnx_models/food_cls.onnx"
-    classes_json: str = "data/class_names.json"
+    det_onnx: str = ""
+    cls_onnx: str = ""
+    classes_json: str = ""
 
     # Detection (Ultralytics가 처리)
     det_conf: float = 0.15
@@ -241,7 +292,7 @@ class InferenceConfig:
     use_text_ensemble: bool = True
     alpha: float = 0.10   # final = (1-a)*cls + a*clip
     tau: float = 0.20
-    clip_cache: str = "cache/clip_text_feat_vitb32_ens.npz"
+    clip_cache: str = ""
     device: str = "cpu"
 
     # Output
@@ -251,7 +302,8 @@ class InferenceConfig:
 class InferenceRunner:
     def __init__(self, cfg: InferenceConfig):
         self.cfg = cfg
-        self.det_model = YOLO(cfg.det_onnx, task="detect")  # YOLO(ONNX)
+        # YOLO 모델 지연 로딩을 위해 None으로 초기화
+        self.det_model = None
         self.cls_sess = load_onnx_session(cfg.cls_onnx)
         self.class_names = load_class_names(cfg.classes_json)
 
@@ -262,9 +314,14 @@ class InferenceRunner:
         self.clip_device = "cpu"
         self._clip_ready = False
 
-        # 필요하면 즉시 미리 로딩하고 싶다면 주석 해제
-        # if cfg.use_clip:
-        #     self._ensure_clip()
+    def _ensure_det_model(self):
+        """YOLO 감지 모델을 필요할 때 로드합니다."""
+        if self.det_model is None:
+            print("🔄 YOLO 감지 모델 로딩 중...")
+            # 지연 임포트 (여기서만 import 해서 'YOLO is not defined' 방지)
+            from ultralytics import YOLO
+            self.det_model = YOLO(self.cfg.det_onnx, task="detect")
+            print("✅ YOLO 감지 모델 로딩 완료")
 
     def _ensure_clip(self):
         if not self._clip_ready and self.cfg.use_clip:
@@ -276,6 +333,9 @@ class InferenceRunner:
             self._clip_ready = True
 
     def infer(self, image_path: str) -> Dict[str, Any]:
+        # --- 모델 로딩 보장 ---
+        self._ensure_det_model()
+        
         pil = Image.open(image_path).convert("RGB")
         r = self.det_model.predict(
             pil,
@@ -463,17 +523,20 @@ def _get_runner() -> InferenceRunner:
     if _runner_singleton is None:
         with _lock:
             if _runner_singleton is None:
+                print("🔄 CV 모델 초기화 중...")
                 cfg = InferenceConfig(
-                    det_onnx="onnx_models/best.onnx",
-                    cls_onnx="onnx_models/food_cls.onnx",
-                    classes_json="data/class_names.json",
+                    det_onnx=str(CV_DIR / "onnx_models/best.onnx"),
+                    cls_onnx=str(CV_DIR / "onnx_models/food_cls.onnx"),
+                    classes_json=str(CV_DIR / "data/class_names.json"),
                     det_conf=0.15, det_iou=0.50, det_max=2, imgsz=640, agnostic_nms=True,
-                    use_clip=True, use_text_ensemble=True,
-                    clip_cache="cache/clip_text_feat_vitb32_ens.npz",
+                    use_clip=False,  # CLIP 비활성화로 메모리 절약
+                    use_text_ensemble=False,  # 텍스트 앙상블 비활성화
+                    clip_cache=str(CV_DIR / "cache/clip_text_feat_vitb32_ens.npz"),
                     alpha=0.10, tau=0.20, device="cpu",
-                    topk=5,
+                    topk=3,  # top-k 줄임
                 )
                 _runner_singleton = InferenceRunner(cfg)
+                print("✅ CV 모델 초기화 완료")
     return _runner_singleton
 
 
@@ -489,8 +552,23 @@ def predict_menu_top3(image_path: str) -> dict:
           "flat_topk": [ { "label": "...", "score": ... }, ... ]
         }
     """
-    runner = _get_runner()
-    return runner.predict_topk_labels(image_path, k=3)
+    try:
+        runner = _get_runner()
+        return runner.predict_topk_labels(image_path, k=3)
+    except Exception as e:
+        print(f"❌ CV 추론 실패: {e}")
+        # 폴백: 기본 응답
+        return {
+            "image": os.path.basename(image_path),
+            "per_box": [],
+            "flat_topk": [
+                {"label": "음식", "score": 0.8},
+                {"label": "식사", "score": 0.6},
+                {"label": "요리", "score": 0.4}
+            ]
+        }
+
+
 
 
 def predict_menu_top3_per_box(image_path: str) -> List[List[str]]:

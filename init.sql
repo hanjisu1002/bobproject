@@ -34,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_nutrition_food_code ON nutrition(food_code);
 -- 3) 사용자
 CREATE TABLE IF NOT EXISTS "user" (
   user_id        SERIAL PRIMARY KEY,
+  name           TEXT, -- 이름 필드 추가 (nullable)
   email          TEXT NOT NULL UNIQUE,
   password_hash  TEXT NOT NULL,
   created_at     TIMESTAMPTZ DEFAULT NOW()
@@ -49,6 +50,8 @@ CREATE TABLE IF NOT EXISTS session (
 -- 5) 프로필
 CREATE TABLE IF NOT EXISTS user_profile (
   user_id           INTEGER PRIMARY KEY REFERENCES "user"(user_id) ON DELETE CASCADE,
+  sex               TEXT, -- 성별 필드 추가 (nullable)
+  age               INTEGER, -- 나이 필드 추가 (nullable)
   daily_kcal_target INTEGER,
   macro_json        JSONB,        -- JSONB 타입으로 변경
   activity_level    TEXT,
