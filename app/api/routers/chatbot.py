@@ -5,10 +5,13 @@ from app.core.security import get_current_user
 from app.schemas.auth import TokenData
 from app.crud.profile import get_profile_by_user_id
 from app.crud.food_log import get_user_food_logs_today
+from sqlalchemy.orm import Session
+from app.db.session import get_db
 import uuid
 from datetime import datetime
 import sys
 import os
+import json # Import json
 
 # LLM 디렉토리를 Python 경로에 추가
 sys.path.append('LLM')
@@ -45,7 +48,8 @@ router = APIRouter()
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_bot(
     request: ChatRequest,
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     챗봇과 대화하기
@@ -89,12 +93,50 @@ async def chat_with_bot(
                 detail="챗봇을 초기화할 수 없습니다"
             )
         
-        # 사용자 프로필 설정
-        if request.user_context.profile:
-            bot.set_user_profile(request.user_context.profile)
+        # 사용자 프로필 및 선호도 설정 (DB에서 가져와 챗봇에 반영)
+        user_profile_from_db, user_preferences_from_db = get_profile_by_user_id(db, current_user.user_id)
         
+        user_profile_data = {}
+
+        if user_profile_from_db:
+            user_profile_data["calories"] = user_profile_from_db.daily_kcal_target
+            if user_profile_from_db.macro_json:
+                # Assuming macro_json is already a dict or None
+                macros = user_profile_from_db.macro_json
+                user_profile_data["protein_g"] = macros.get("protein_g")
+                user_profile_data["fat_g"] = macros.get("fat_g")
+                user_profile_data["carbs_g"] = macros.get("carbs_g")
+
+        if user_preferences_from_db:
+            if user_preferences_from_db.exclude_allergens_json:
+                # Assuming exclude_allergens_json is already a list or None
+                user_profile_data["allergens"] = user_preferences_from_db.exclude_allergens_json
+            
+            prefers_list = []
+            if user_preferences_from_db.diet_types_json:
+                # Assuming diet_types_json is already a list or None
+                prefers_list.extend(user_preferences_from_db.diet_types_json)
+            if user_preferences_from_db.like_cuisines_json:
+                # Assuming like_cuisines_json is already a list or None
+                prefers_list.extend(user_preferences_from_db.like_cuisines_json)
+            user_profile_data["prefers"] = prefers_list
+
+        # Filter out None values if the attributes don't exist or are not set
+        user_profile_data = {k: v for k, v in user_profile_data.items() if v is not None}
+
+        if user_profile_data: # Only set if there's actual data to set
+            bot.set_user_profile(user_profile_data)
+        else:
+            print(f"DEBUG: No user profile or preferences found in DB for user {current_user.user_id}. Using default chatbot profile.")
+        
+        # 초기 음식명 설정 (이미지 인식 결과가 있다면)
+        initial_food_name = None
+        if request.food_recognition and request.food_recognition.food_name:
+            initial_food_name = request.food_recognition.food_name
+            print(f"DEBUG: Initial food name from recognition: {initial_food_name}")
+
         # 챗봇 응답 생성
-        response_text = bot.ask(request.message)
+        response_text = bot.ask(request.message, initial_food_name=initial_food_name)
         
         # 응답 생성
         response = ChatResponse(
@@ -118,7 +160,8 @@ async def chat_with_bot(
 @router.post("/chat/with-image", response_model=ChatResponse)
 async def chat_with_image_recognition(
     request: ChatRequest,
-    current_user: TokenData = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     이미지 인식 결과와 함께 챗봇과 대화하기
@@ -153,12 +196,50 @@ async def chat_with_image_recognition(
                 detail="챗봇을 초기화할 수 없습니다"
             )
         
-        # 사용자 프로필 설정
-        if request.user_context.profile:
-            bot.set_user_profile(request.user_context.profile)
+        # 사용자 프로필 및 선호도 설정 (DB에서 가져와 챗봇에 반영)
+        user_profile_from_db, user_preferences_from_db = get_profile_by_user_id(db, current_user.user_id)
         
+        user_profile_data = {}
+
+        if user_profile_from_db:
+            user_profile_data["calories"] = user_profile_from_db.daily_kcal_target
+            if user_profile_from_db.macro_json:
+                # Assuming macro_json is already a dict or None
+                macros = user_profile_from_db.macro_json
+                user_profile_data["protein_g"] = macros.get("protein_g")
+                user_profile_data["fat_g"] = macros.get("fat_g")
+                user_profile_data["carbs_g"] = macros.get("carbs_g")
+
+        if user_preferences_from_db:
+            if user_preferences_from_db.exclude_allergens_json:
+                # Assuming exclude_allergens_json is already a list or None
+                user_profile_data["allergens"] = user_preferences_from_db.exclude_allergens_json
+            
+            prefers_list = []
+            if user_preferences_from_db.diet_types_json:
+                # Assuming diet_types_json is already a list or None
+                prefers_list.extend(user_preferences_from_db.diet_types_json)
+            if user_preferences_from_db.like_cuisines_json:
+                # Assuming like_cuisines_json is already a list or None
+                prefers_list.extend(user_preferences_from_db.like_cuisines_json)
+            user_profile_data["prefers"] = prefers_list
+
+        # Filter out None values if the attributes don't exist or are not set
+        user_profile_data = {k: v for k, v in user_profile_data.items() if v is not None}
+
+        if user_profile_data: # Only set if there's actual data to set
+            bot.set_user_profile(user_profile_data)
+        else:
+            print(f"DEBUG: No user profile or preferences found in DB for user {current_user.user_id}. Using default chatbot profile.")
+        
+        # 초기 음식명 설정 (이미지 인식 결과가 있다면)
+        initial_food_name = None
+        if request.food_recognition and request.food_recognition.food_name:
+            initial_food_name = request.food_recognition.food_name
+            print(f"DEBUG: Initial food name from recognition: {initial_food_name}")
+
         # 챗봇 응답 생성
-        response_text = bot.ask(request.message)
+        response_text = bot.ask(request.message, initial_food_name=initial_food_name)
         
         # 응답 생성
         response = ChatResponse(
@@ -177,76 +258,3 @@ async def chat_with_image_recognition(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"챗봇 응답 생성 중 오류가 발생했습니다: {str(e)}"
         )
-
-@router.get("/context/{user_id}", response_model=dict)
-async def get_user_chat_context(
-    user_id: str,
-    current_user: TokenData = Depends(get_current_user)
-):
-    """
-    사용자의 챗봇 대화 컨텍스트 정보 가져오기
-    
-    현재 로그인된 사용자의 프로필, 목표, 선호도 등의 정보를 반환합니다.
-    """
-    
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="로그인이 필요합니다"
-        )
-    
-    if user_id != current_user.user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="자신의 정보만 조회할 수 있습니다"
-        )
-    
-    try:
-        # 사용자 프로필 정보 가져오기
-        user_profile = await get_profile_by_user_id(user_id)
-        
-        # 오늘 섭취한 음식 정보 가져오기
-        today_foods = await get_user_food_logs_today(user_id)
-        
-        context = {
-            "user_id": user_id,
-            "profile": user_profile.dict() if user_profile else None,
-            "today_foods": today_foods,
-            "total_calories_today": sum(food.get('calories', 0) for food in today_foods)
-        }
-        
-        return context
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"컨텍스트 정보 조회 중 오류가 발생했습니다: {str(e)}"
-        )
-
-@router.get("/health")
-async def chatbot_health_check():
-    """
-    챗봇 서비스 상태 확인
-    
-    LLM 연결 상태와 음식 데이터 로드 상태를 확인합니다.
-    """
-    
-    bot = get_chatbot()
-    
-    health_status = {
-        "status": "healthy",
-        "llm_available": bot is not None,
-        "food_data_loaded": bot is not None and hasattr(bot, 'master_df'),
-        "api_key_configured": os.getenv("GOOGLE_API_KEY") is not None,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    if not health_status["api_key_configured"]:
-        health_status["status"] = "warning"
-        health_status["message"] = "GOOGLE_API_KEY가 설정되지 않았습니다"
-    
-    if not health_status["llm_available"]:
-        health_status["status"] = "warning"
-        health_status["message"] = "LLM 챗봇을 사용할 수 없습니다"
-    
-    return health_status
