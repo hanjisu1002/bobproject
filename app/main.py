@@ -30,26 +30,29 @@ app = FastAPI(title=settings.APP_NAME)
 서버는 allow_credentials=True 가 필요하고,
 allow_origins 에 정확한 오리진(와일드카드 X)을 넣어야 한다.
 """
-ALLOWED = [
-    "https://yonsei-bob-zip.vercel.app",  # 프로덕션 프론트
+ALLOWED_DEFAULT = [
+    "https://yonsei-bob-zip.vercel.app",
     "https://bobproject-gules.vercel.app",
-    "http://localhost:8081",              # 로컬(웹/Expo web)
+    "http://localhost:8081",
+    "http://localhost:5173",
 ]
 
-# 환경변수로 추가 오리진 허용(쉼표 구분)
 if settings.ALLOWED_ORIGINS:
-    _extra = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-    for o in _extra:
-        if o not in ALLOWED:
-            ALLOWED.append(o)
+    origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+    for o in ALLOWED_DEFAULT:
+        if o not in origins:
+            origins.append(o)
+else:
+    origins = ALLOWED_DEFAULT
+
 
 # (선택) vercel 프리뷰 전체 허용: https://*.vercel.app
 vercel_preview_regex = r"^https://.*\.vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED,                 # 필요하면 * 도 가능 (credentials=False일 때)
-    # allow_origin_regex=vercel_preview_regex,  # 프리뷰 전부 허용하고 싶으면 유지
+    allow_origins=origins,                 # 필요하면 * 도 가능 (credentials=False일 때)
+    allow_origin_regex=vercel_preview_regex,  # 프리뷰 전부 허용하고 싶으면 유지
     allow_credentials=False,               # <-- 쿠키 안 쓰므로 False
     allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
     allow_headers=["*"],                   # Authorization 포함
