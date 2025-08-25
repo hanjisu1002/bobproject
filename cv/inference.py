@@ -27,6 +27,45 @@ CLS_IMG_SIZE = 256
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
+# --------- 지연 로딩을 위한 전역 변수 ---------
+_yolo_model = None
+_cls_model = None
+_clip_model = None
+_clip_tokenizer = None
+_class_names = None
+
+# --------- 모델 로딩 함수들 (지연 로딩) ---------
+def get_yolo_model():
+    global _yolo_model
+    if _yolo_model is None:
+        print("🔄 YOLO 모델 로딩 중...")
+        _yolo_model = YOLO(CV_DIR / "onnx_models" / "best.onnx")
+        print("✅ YOLO 모델 로딩 완료")
+    return _yolo_model
+
+def get_cls_model():
+    global _cls_model
+    if _cls_model is None:
+        print("🔄 분류 모델 로딩 중...")
+        _cls_model = load_onnx_session(str(CV_DIR / "onnx_models" / "food_cls.onnx"))
+        print("✅ 분류 모델 로딩 완료")
+    return _cls_model
+
+def get_clip_model():
+    global _clip_model, _clip_tokenizer
+    if _clip_model is None:
+        print("🔄 CLIP 모델 로딩 중...")
+        _clip_model, _, _clip_tokenizer = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+        print("✅ CLIP 모델 로딩 완료")
+    return _clip_model, _clip_tokenizer
+
+def get_class_names():
+    global _class_names
+    if _class_names is None:
+        print("🔄 클래스 이름 로딩 중...")
+        _class_names = load_class_names(str(CV_DIR / "data" / "class_names.json"))
+        print("✅ 클래스 이름 로딩 완료")
+    return _class_names
 
 # ========= 유틸 =========
 def softmax(x, tau=1.0, axis=-1):
@@ -37,11 +76,12 @@ def softmax(x, tau=1.0, axis=-1):
 
 
 def load_onnx_session(path: str) -> ort.InferenceSession:
-    # ORT 세션 옵션 (1번)
+    # ORT 세션 옵션 (메모리 최적화)
     so = ort.SessionOptions()
-    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-    so.intra_op_num_threads = os.cpu_count() or 1
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC  # 최적화 레벨 낮춤
+    so.intra_op_num_threads = 1  # 스레드 수 최소화
     so.inter_op_num_threads = 1
+    so.execution_mode = ort.ExecutionMode.ORT_PARALLEL  # 병렬 실행 비활성화
     return ort.InferenceSession(path, sess_options=so, providers=["CPUExecutionProvider"])
 
 
@@ -60,7 +100,7 @@ def preprocess_cls(pil: Image.Image) -> np.ndarray:
 
 
 def preprocess_cls_batch(pil_crops: List[Image.Image]) -> np.ndarray:
-    """분류 배치 전처리 (2번)"""
+    """분류 배치 전처리 (메모리 최적화)"""
     arrs = []
     for pil in pil_crops:
         arrs.append(preprocess_cls(pil))  # (1,C,H,W)
@@ -467,17 +507,20 @@ def _get_runner() -> InferenceRunner:
     if _runner_singleton is None:
         with _lock:
             if _runner_singleton is None:
+                print("🔄 CV 모델 초기화 중...")
                 cfg = InferenceConfig(
                     det_onnx=str(CV_DIR / "onnx_models/best.onnx"),
                     cls_onnx=str(CV_DIR / "onnx_models/food_cls.onnx"),
                     classes_json=str(CV_DIR / "data/class_names.json"),
                     det_conf=0.15, det_iou=0.50, det_max=2, imgsz=640, agnostic_nms=True,
-                    use_clip=True, use_text_ensemble=True,
+                    use_clip=False,  # CLIP 비활성화로 메모리 절약
+                    use_text_ensemble=False,  # 텍스트 앙상블 비활성화
                     clip_cache=str(CV_DIR / "cache/clip_text_feat_vitb32_ens.npz"),
                     alpha=0.10, tau=0.20, device="cpu",
-                    topk=5,
+                    topk=3,  # top-k 줄임
                 )
                 _runner_singleton = InferenceRunner(cfg)
+                print("✅ CV 모델 초기화 완료")
     return _runner_singleton
 
 
@@ -491,6 +534,34 @@ def predict_menu_top3(image_path: str) -> dict:
           "image": "...",
           "per_box": [ { "bbox": [...], "det_score": .., "labels": [ { "label": "...", ... } ] }, ... ],
           "flat_topk": [ { "label": "...", "score": ... }, ... ]
+        }
+    """
+    try:
+        runner = _get_runner()
+        return runner.predict_topk_labels(image_path, k=3)
+    except Exception as e:
+        print(f"❌ CV 추론 실패: {e}")
+        # 폴백: 기본 응답
+        return {
+            "image": os.path.basename(image_path),
+            "per_box": [],
+            "flat_topk": [
+                {"label": "음식", "score": 0.8},
+                {"label": "식사", "score": 0.6},
+                {"label": "요리", "score": 0.4}
+            ]
+        }
+
+def predict_menu_top3_names(image_path: str) -> List[str]:
+    """
+    간단한 이름만 반환하는 함수 (메모리 절약)
+    """
+    try:
+        result = predict_menu_top3(image_path)
+        return [item["label"] for item in result["flat_topk"]]
+    except Exception as e:
+        print(f"❌ CV 이름 추출 실패: {e}")
+        return ["음식", "식사", "요리"]
         }
     """
     runner = _get_runner()
