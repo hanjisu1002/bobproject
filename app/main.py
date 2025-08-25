@@ -115,7 +115,7 @@ app.include_router(food_log.router, prefix=f"{settings.API_PREFIX}", tags=["food
 
 # CV 및 LLM 라우터 (지연 로딩으로 처리)
 app.include_router(vision.router, prefix=f"{settings.API_PREFIX}", tags=["vision"])
-app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}/chatbot", tags=["chatbot"])
+app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}", tags=["chatbot"])
 
 # ---------------------------
 # 간단한 루트 페이지

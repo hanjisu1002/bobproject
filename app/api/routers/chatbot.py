@@ -90,7 +90,7 @@ def _build_user_profile_payload(db: Session, user_id: str) -> dict:
 
 router = APIRouter()
 
-@router.post("chat", response_model=ChatResponse)
+@router.post("/chatbot/chat", response_model=ChatResponse)
 async def chat_with_bot(
     request: ChatRequest,
     current_user: TokenData = Depends(get_current_user),
@@ -150,7 +150,7 @@ async def chat_with_bot(
         food_recognition=request.food_recognition
     )
 
-@router.post("/chat/with-image", response_model=ChatResponse)
+@router.post("/chatbot/chat/with-image", response_model=ChatResponse)
 async def chat_with_image_recognition(
     request: ChatRequest,
     current_user: TokenData = Depends(get_current_user),
