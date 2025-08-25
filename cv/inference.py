@@ -562,10 +562,7 @@ def predict_menu_top3_names(image_path: str) -> List[str]:
     except Exception as e:
         print(f"❌ CV 이름 추출 실패: {e}")
         return ["음식", "식사", "요리"]
-        }
-    """
-    runner = _get_runner()
-    return runner.predict_topk_labels(image_path, k=3)
+        
 
 
 def predict_menu_top3_per_box(image_path: str) -> List[List[str]]:
