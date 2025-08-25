@@ -299,7 +299,8 @@ class InferenceConfig:
 class InferenceRunner:
     def __init__(self, cfg: InferenceConfig):
         self.cfg = cfg
-        self.det_model = YOLO(cfg.det_onnx, task="detect")  # YOLO(ONNX)
+        # YOLO 모델 지연 로딩을 위해 None으로 초기화
+        self.det_model = None
         self.cls_sess = load_onnx_session(cfg.cls_onnx)
         self.class_names = load_class_names(cfg.classes_json)
 
@@ -310,9 +311,12 @@ class InferenceRunner:
         self.clip_device = "cpu"
         self._clip_ready = False
 
-        # 필요하면 즉시 미리 로딩하고 싶다면 주석 해제
-        # if cfg.use_clip:
-        #     self._ensure_clip()
+    def _ensure_det_model(self):
+        """YOLO 감지 모델을 필요할 때 로드합니다."""
+        if self.det_model is None:
+            print("🔄 YOLO 감지 모델 로딩 중...")
+            self.det_model = YOLO(self.cfg.det_onnx, task="detect")
+            print("✅ YOLO 감지 모델 로딩 완료")
 
     def _ensure_clip(self):
         if not self._clip_ready and self.cfg.use_clip:
@@ -324,6 +328,9 @@ class InferenceRunner:
             self._clip_ready = True
 
     def infer(self, image_path: str) -> Dict[str, Any]:
+        # --- 모델 로딩 보장 ---
+        self._ensure_det_model()
+        
         pil = Image.open(image_path).convert("RGB")
         r = self.det_model.predict(
             pil,
