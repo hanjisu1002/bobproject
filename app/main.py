@@ -26,32 +26,36 @@ app = FastAPI(title=settings.APP_NAME)
 # CORS
 # ---------------------------
 """
-CORS 설정 (쿠키 미사용 가정 → credentials=False)
-- 정확한 도메인 화이트리스트만 허용
-- Vercel 프리뷰 서브도메인 허용을 위해 정규식 추가 가능
+프론트에서 withCredentials: true 를 사용하므로(로그에 명시), 
+서버는 allow_credentials=True 가 필요하고,
+allow_origins 에 정확한 오리진(와일드카드 X)을 넣어야 한다.
 """
 ALLOWED = [
     "https://yonsei-bob-zip.vercel.app",  # 프로덕션 프론트
-    "http://localhost:8081",               # 로컬(웹/Expo web)
+    "https://bobproject-gules.vercel.app",
+    "http://localhost:8081",              # 로컬(웹/Expo web)
 ]
-if settings.ALLOWED_ORIGINS:
-    origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-    for o in ALLOWED:
-        if o not in origins:
-            origins.append(o)
-else:
-    origins = ALLOWED
 
-vercel_preview_regex = r"^https://.*\\.vercel\\.app$"
+# 환경변수로 추가 오리진 허용(쉼표 구분)
+if settings.ALLOWED_ORIGINS:
+    _extra = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+    for o in _extra:
+        if o not in ALLOWED:
+            ALLOWED.append(o)
+
+# (선택) vercel 프리뷰 전체 허용: https://*.vercel.app
+vercel_preview_regex = r"^https://.*\.vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=vercel_preview_regex,
-    allow_credentials=False,  # 쿠키 미사용 시 False (와일드카드/간단화 가능)
-    allow_methods=["*"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_origins=ALLOWED,                 # 필요하면 * 도 가능 (credentials=False일 때)
+    # allow_origin_regex=vercel_preview_regex,  # 프리뷰 전부 허용하고 싶으면 유지
+    allow_credentials=False,               # <-- 쿠키 안 쓰므로 False
+    allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
+    allow_headers=["*"],                   # Authorization 포함
+    # expose_headers=["set-cookie"],       # 쿠키 안 쓰면 굳이 노출할 필요 없음 -> 제거
 )
+
 
 # ---------------------------
 # 스타트업: DB 초기화 (재시도 포함) - 메모리 최적화

@@ -9,7 +9,6 @@ const API_BASE_URL = __DEV__
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,  // 쿠키 포함 (CORS credentials)
 });
 
 // 요청 인터셉터: 토큰 자동 추가
@@ -62,7 +61,9 @@ export const menuAPI = {
   getSimilarMenu: (id: string, k?: number) =>
     api.get(`/menu/${id}/similar`, { params: { k } }),
   getMenuCategories: () => api.get('/menu/categories'),
-  getMenusByCategory: (category: string) => api.get(`/menu/by_category?category=${category}`), // Add this line
+  getMenusByCategory: (category: string) =>
+    api.get('/menu/by_category', { params: { category } })
+  
 };
 
 export const recommendAPI = {
