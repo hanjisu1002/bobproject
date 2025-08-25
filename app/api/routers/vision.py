@@ -13,21 +13,6 @@ from app.schemas.menu import MenuWithNutrition
 
 router = APIRouter()
 
-def get_yolo():
-    """
-    YOLO 모델을 최초 1회만 로딩하여 app.state에 캐싱.
-    (cv.inference에서 YOLO를 직접 쓴다면 그 파일에도 import가 필요)
-    """
-    if not hasattr(app.state, "yolo_model"):
-        try:
-            from ultralytics import YOLO  # ✅ import 존재해야 함
-        except ImportError:
-            # 서버에 ultralytics가 설치되지 않은 경우
-            raise HTTPException(status_code=501, detail="YOLO is not installed on the server")
-        # 가벼운 기본 가중치
-        app.state.yolo_model = YOLO("yolov8n.pt")
-    return app.state.yolo_model
-
 @router.post("/vision/recognize-food", response_model=List[MenuWithNutrition])
 async def recognize_food_image(
     file: UploadFile = File(...),
@@ -41,9 +26,6 @@ async def recognize_food_image(
 
     tmp_path = None
     try:
-        # ✅ YOLO 지연 로딩(ultralytics 미설치/모델 로딩 문제를 조기 감지)
-        _ = get_yolo()
-
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
