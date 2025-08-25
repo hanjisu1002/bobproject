@@ -11,7 +11,7 @@ import { useRouter } from "expo-router"; // ← 추가
 // import ChatDemo from "../../components/ChatDemo"; // ← 제거
 import FancyButton from "../../components/FancyButton";
 import Section from "../../components/Section";
-import { apiInfer, InferenceResp } from "../../lib/api";
+import { apiInfer, type InferenceResp } from "@/lib/api";
 import { evaluate } from "../../lib/eval";
 import { addRecord } from "../../lib/records";
 import { loadJSON } from "../../lib/storage";
@@ -204,7 +204,7 @@ export default function Upload() {
                 )}
 
                 <View style={{ height: 10 }} />
-                <FancyButton title="이 메뉴로 캘린더에 저장" variant="outline" onPress={saveRecord} disabled={!selectedNutrition} />
+                <FancyButton title="이 메뉴로 캘린더에 저장" variant="outline" onPress={selectedNutrition ? saveRecord : undefined} />
               </Section>
             )}
 
