@@ -63,7 +63,7 @@ const QUICK_TIPS: Record<QuickKey, string> = {
 
 /* === Utils === */
 const niceId = () => Math.random().toString(36).slice(2);
-const envApiBase = () => 'http://localhost:8000/v1';
+const envApiBase = () => 'https://bobproject-server.onrender.com/v1';
 
 const welcomeText = (mealName?: string) =>
   `안녕하세요, 헬핏이에요! 😊
