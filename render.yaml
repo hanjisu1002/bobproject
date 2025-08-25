@@ -4,7 +4,7 @@ services:
     environment:
     rootDir: .              # 현재 루트 디렉토리 (app/ 폴더가 여기 있음)
     buildCommand: pip install --upgrade pip setuptools wheel && PIP_PREFER_BINARY=1 pip install --prefer-binary -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --lifespan off
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --lifespan off --limit-concurrency 1 --timeout-keep-alive 5
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.6  # Python 3.13 대신 3.11 사용 (torch-cpu 호환성)
@@ -62,4 +62,10 @@ services:
         value: "400"  # Python 메모리 사용량 제한 (MB)
       - key: MAX_WORKERS
         value: "1"  # 워커 수 제한
+      - key: USE_ULTRA
+        value: "0"
+      - key: USE_ONNX_DET
+        value: "1"
+      - key: USE_ONNX_CLS
+        value: "1"
     healthCheckPath: /

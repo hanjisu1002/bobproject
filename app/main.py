@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, vision, food_log, chatbot
 from app.db.session import init_db
 from app.core.catalog import Catalog # Add this import
+from app.services.cv_runtime import init_cv
 
 # 로깅 기본 설정 (원하면 settings로 조절)
 logging.basicConfig(
@@ -77,6 +78,8 @@ def ping():
 @app.on_event("startup")
 async def _startup():
     log.info(f"[Startup] API is starting on port {PORT} with origins={origins}")
+    init_cv(app)
+    log.info("[Startup] API startup completed")
     
     # DB 초기화 (필수)
     try:
