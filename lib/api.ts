@@ -2,7 +2,8 @@ import axios from 'axios';
 import { loadJSON } from './storage'; // loadJSON import 추가
 
 // 기존 백엔드 API 설정
-const API_BASE_URL = __DEV__ 
+// For local development, force the API to point to the local server.
+const API_BASE_URL = __DEV__
   ? (process.env.EXPO_PUBLIC_API_BASE || 'http://localhost:8000/v1')  // 개발 환경
   : 'https://bobproject-server.onrender.com/v1';  // 프로덕션 환경 (기본값)
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.routers import health, auth, me, menu, recommend, recognize, food_log, chatbot
+from app.api.routers import health, auth, me, menu, recommend, vision, food_log, chatbot
 from app.db.session import init_db
 from app.core.catalog import Catalog # Add this import
 

@@ -1,10 +1,10 @@
-
 import os
 import warnings
 from typing import List, Set, Tuple, Optional, Dict, Any
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
+import re  # ★ 변경: 선호/알레르기 태그 파싱 및 스몰톡 보조용
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -32,7 +32,9 @@ def contains_any(text: str, keys) -> bool:
 NO_CONTEXT_SINGLE_WORDS = {
     "고마워","감사","감사합니다","땡큐","thanks","thankyou","넵","네","응","예","그래",
     "좋아","맞아","오케이","ok","okk","ㅇㅇ","ㅇㅋ","ㅋ","ㅋㅋ","ㅋㅋㅋ","ㅎㅎ","ㅎㅎㅎ",
-    "그래요","맞아요","알겠어","알겠습니다","고마웠어","감사해","굿","굿굿","완료","확인"
+    "그래요","맞아요","알겠어","알겠습니다","고마웠어","감사해","굿","굿굿","완료","확인",
+    # ★ 변경: 인사어 추가
+    "안녕","안녕하세요","하이","hi","hello","ㅎㅇ"
 }
 
 # ===== 데이터 적재/정규화 =====
@@ -112,12 +114,12 @@ def create_rag_retriever(df: pd.DataFrame, embedding_model):
         calories_str = "정보 없음" if pd.isna(row.get("calories")) else f"{row['calories']:.1f} kcal"
         row_disp = row.fillna("정보 없음")
         content = (
-            f"음식명: {row_disp['food_name']}\n"
-            f"1회 제공량: {row_disp['serving_size']}{row_disp.get('unit','g')}\n"
-            f"칼로리: {calories_str}\n"
-            f"주요 영양소: 단백질 {row_disp['protein_g']}g, 지방 {row_disp['fat_g']}g, 탄수화물 {row_disp['carbs_g']}g\n"
-            f"상세 영양소: 당류 {row_disp['sugars_g']}g, 나트륨 {row_disp['sodium_mg']}mg\n"
-            f"특징 태그: {row_disp['tags']}\n"
+            f"음식명: {row_disp['food_name']}"
+            f"1회 제공량: {row_disp['serving_size']}{row_disp.get('unit','g')}"
+            f"칼로리: {calories_str}"
+            f"주요 영양소: 단백질 {row_disp['protein_g']}g, 지방 {row_disp['fat_g']}g, 탄수화물 {row_disp['carbs_g']}g"
+            f"상세 영양소: 당류 {row_disp['sugars_g']}g, 나트륨 {row_disp['sodium_mg']}mg"
+            f"특징 태그: {row_disp['tags']}"
             f"설명: {row_disp['description']}"
         )
         meta = {
@@ -197,6 +199,12 @@ class Chatbot:
         self.goal_keywords = ["목표","저녁 뭐 먹지","남은 목표","남은 칼로리","남은 단백질","오늘 계획","채워야"]
         self.what_is_it_triggers = ["이 음식이 뭐야","이 음식 뭐야","지금 음식 뭐야","이게 뭐야","지금 음식","현재 음식","이 음식이 뭔데"]
 
+        # ★ 추가: 추천 페이지네이션 상태
+        self.reco_batch_size = 3  # 한 번에 보여줄 개수
+        self._reco_history: set[str] = set()  # 이미 노출한 추천 항목
+        self._reco_context_food: Optional[str] = None  # 컨텍스트 변경 감지
+        self.refresh_triggers = ["다른거","다른 거","또","말고","더 보여줘","리프레시","새로","more","다른거 추천","다른 거 추천"]
+
     # ======= 지연 로딩 메서드들 =======
     @property
     def llm(self):
@@ -251,12 +259,21 @@ class Chatbot:
         return self._rag_chain
 
     # ======= 공개 API =======
-    def ask(self, user_input: str) -> str:
+    def ask(self, user_input: str, initial_food_name: Optional[str] = None) -> str:
         """
         프론트/백엔드에서 이 메서드만 호출하면 됩니다.
         입력 한 줄 -> 응답 문자열
         """
         text = normalize_text(user_input)
+
+        # ★ 변경: 스몰톡(인사/감사/잡담) 우선 처리 — 룰 + LLM 하이브리드
+        if self._is_smalltalk(text):
+            if text in {"고마워","감사","감사합니다","감사해","땡큐","thanks","thankyou"}:
+                return ("헬핏 COACH: 감사합니다! 언제든 건강 관련해서 물어봐주세요 😄\n" 
+                        "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
+            return ("헬핏 COACH: 안녕하세요! 무엇을 도와드릴까요? 😊 "
+                    "음식 이름, 섭취량, 목표 등 아무거나 물어보세요.\n" 
+                    "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
 
         # A) 현재 음식 묻기
         if any(t in text for t in self.what_is_it_triggers):
@@ -273,13 +290,24 @@ class Chatbot:
                 return self._handle_situational_question(text)
             return self._need_food_first()
 
+        # ★ 추가: "다른 거" 새 추천 요청
+        if any(t in text for t in self.refresh_triggers):
+            self._maybe_set_context_from_inline(text)
+            if self.current_meal_context:
+                self._maybe_reset_reco_if_context_changed()  # 컨텍스트 바뀌면 히스토리 리셋
+                return self._handle_recommendation(refresh=True)
+            return ("헬핏 COACH: 어떤 음식 기준으로 새로 추천할지 먼저 알려주세요! "
+                    "(예: 비빔밥 말고 다른 거 추천)\n" 
+                    "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
+
         # C) 곁들일 반찬/음료
         if any(t in text for t in self.recommend_triggers):
             self._maybe_set_context_from_inline(text)
             if self.current_meal_context:
-                return self._handle_recommendation()
+                self._maybe_reset_reco_if_context_changed()  # 컨텍스트 바뀌면 히스토리 리셋
+                return self._handle_recommendation(refresh=False)
             return ("헬핏 COACH: 어떤 음식에 곁들일지 먼저 알려주세요! "
-                    "(예: 갈비탕 → 같이 먹으면 좋은 음식 추천)\n"
+                    "(예: 갈비탕 → 같이 먹으면 좋은 음식 추천)\n" 
                     "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
 
         # D) 양 조절
@@ -288,18 +316,28 @@ class Chatbot:
             if self.current_meal_context:
                 return self._handle_portion(text)
             return ("헬핏 COACH: 어떤 음식에 대한 양을 조절할까요? 먼저 음식 정보를 알려주세요. "
-                    "(예: 비빔냉면 절반만 먹었어)\n"
+                    "(예: 비빔냉면 절반만 먹었어)\n" 
                     "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
 
         # E) 일반 RAG
         return self._general_rag(text)
 
+    # ### ★ 변경: set_user_profile 확장 (선호/알레르기 리스트도 반영)
     def set_user_profile(self, profile: Dict[str, float]) -> None:
-        self.user_profile.update(profile or {})
+        profile = profile or {}
+        # 숫자 키 업데이트
+        for k in ("calories","protein_g","fat_g","carbs_g","sugars_g","sodium_mg"):
+            if k in profile:
+                self.user_profile[k] = profile[k]
+        # 리스트 키(선호/알레르기) 업데이트
+        for k in ("prefers","allergens"):
+            if k in profile and isinstance(profile[k], list):
+                self.user_profile[k] = [str(x).lower().strip() for x in profile[k]]
 
     def reset_day(self) -> None:
         self.consumed_today = {k: 0.0 for k in self.consumed_today}
         self.current_meal_context = None
+        self._reset_reco_cycle()  # ★ 추가: 하루 리셋 시 추천 히스토리도 초기화
 
     def get_state(self) -> Dict[str, Any]:
         return {
@@ -323,6 +361,15 @@ class Chatbot:
             "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요."
         )
 
+    def _reset_reco_cycle(self):  # ★ 추가
+        self._reco_history.clear()
+        self._reco_context_food = (self.current_meal_context or {}).get("food_name")
+
+    def _maybe_reset_reco_if_context_changed(self):  # ★ 추가
+        cur = (self.current_meal_context or {}).get("food_name")
+        if cur and self._reco_context_food != cur:
+            self._reset_reco_cycle()
+
     def _maybe_set_context_from_inline(self, text: str) -> None:
         if self.current_meal_context is None:
             fname = find_food_in_text(text, self.FOOD_NAMES)
@@ -330,6 +377,7 @@ class Chatbot:
                 row = get_context_row_by_name(self.master_df, fname)
                 if row:
                     self.current_meal_context = row
+                    self._reset_reco_cycle()  # ★ 추가
 
     def _handle_portion(self, user_input: str) -> str:
         adjusted = self._portion_adjust(user_input, self.current_meal_context)
@@ -373,7 +421,7 @@ class Chatbot:
                 adjusted[key] = round(float(val) * m, 2)
         return adjusted
 
-    def _handle_recommendation(self) -> str:
+    def _handle_recommendation(self, refresh: bool = False) -> str:  # ★ 변경: 인자 추가
         base = self.current_meal_context or {}
         current_food_name = (base.get("food_name") or "").strip()
         keys = ["calories","protein_g","fat_g","carbs_g","sugars_g","sodium_mg"]
@@ -381,55 +429,117 @@ class Chatbot:
 
         analysis_prompt = PromptTemplate.from_template(
             "너는 영양 코치야. 음식 이름을 반드시 그대로 포함해, "
-            "'{food_name}'의 영양적 특징을 한 문장으로 요약.\n[영양] {nutri}"
+            f"'{current_food_name}'의 영양적 특징을 한 문장으로요약.\n[영양] {nutri_str}"
         )
         analysis = (analysis_prompt | self.llm | StrOutputParser()).invoke({
             "food_name": current_food_name or "이 음식",
             "nutri": nutri_str
         })
 
-        # 후보 검색
+        # 후보 검색 풀 (약간 넉넉히)
         q = f"{analysis} 보완용 반찬/음료 추천. '{current_food_name}' 제외."
         try:
             docs = self.retriever_side_drink.invoke(q) or []
         except Exception:
             docs = []
 
-        def doc_to_line(d):
+        # 문서 → 구조화
+        rows = []
+        seen_names = set([current_food_name])
+        for d in docs:
             m = getattr(d, "metadata", {}) or {}
-            name = (m.get("food_name") or "추천 항목").strip()
+            name = (m.get("food_name") or "").strip()
+            if not name or name in seen_names:
+                continue
+            seen_names.add(name)
             desc = (m.get("description") or "").strip()
-            tags = (m.get("tags") or "").strip()
+            tags_raw = (m.get("tags") or "").strip()
             if not desc:
                 pc = getattr(d, "page_content", "") or ""
                 for line in pc.splitlines():
                     if line.startswith("설명:"):
                         desc = line.replace("설명:", "").strip()
                         break
-            extra = f" (태그: {tags})" if tags else ""
-            return name, f"- {name}: {desc}{extra}"
+            s = str(tags_raw).strip().strip("[]")
+            tag_list = [t for t in re.split(r"[,\|/ ]+", s) if t]
+            tag_list = [str(t).lower().strip().strip("'\"") for t in tag_list if str(t).strip()]
+            rows.append({
+                "food_name": name,
+                "description": desc,
+                "tags": tag_list,
+                "meta": m
+            })
+            if len(rows) >= 12:
+                break
 
-        candidate_lines = []
-        seen = set([current_food_name])
-        for d in docs:
-            nm, line = doc_to_line(d)
-            if nm and nm not in seen:
-                candidate_lines.append(line)
-                seen.add(nm)
-                if len(candidate_lines) >= 5:
+        # 알레르기/선호 반영 + 정렬
+        prefers = set(str(x).lower().strip() for x in self.user_profile.get("prefers", []))
+        allergens = set(str(x).lower().strip() for x in self.user_profile.get("allergens", []))
+
+        def violates(tags): return len(allergens & set(tags)) > 0
+        def pref_score(tags): return float(len(prefers & set(tags)))
+        def density(meta):
+            c = float((meta or {}).get("calories") or 0) or 1e-6
+            p = float((meta or {}).get("protein_g") or 0)
+            return p / c
+
+        safe = [r for r in rows if not violates(r["tags"])]
+        blocked = [r for r in rows if violates(r["tags"])]
+        safe = sorted(safe, key=lambda r: (pref_score(r["tags"]), density(r.get("meta"))), reverse=True)
+
+        # ★ 핵심: 이미 보여준 항목 제외 → 배치 선택
+        batch = []
+        for r in safe:
+            nm = r["food_name"]
+            if nm in self._reco_history:
+                continue
+            batch.append(r)
+            if len(batch) >= self.reco_batch_size:
+                break
+
+        # 새로 줄 게 없으면 히스토리 리셋 후 재시작
+        reset_note = ""
+        if not batch and safe:
+            self._reco_history.clear()
+            reset_note = " (모든 후보를 이미 보여드려 처음부터 다시 제안합니다)"
+            for r in safe:
+                nm = r["food_name"]
+                if nm == current_food_name:
+                    continue
+                batch.append(r)
+                if len(batch) >= self.reco_batch_size:
                     break
 
-        candidates = "\n".join(candidate_lines) if candidate_lines else "- (후보 없음)"
-        recommend_prompt = PromptTemplate.from_template(
-            "[현재 음식 분석]\n{analysis}\n\n[후보 목록]\n{candidates}\n\n"
-            "[지시] 후보에서 2~3개를 골라 '이름 - 한 줄 근거'로 제시. "
-            "근거는 후보 설명/태그에서만. 의학적 조언 금지."
-        )
-        body = (recommend_prompt | self.llm | StrOutputParser()).invoke({
-            "analysis": analysis,
-            "candidates": candidates
-        })
-        return f"{analysis}\n\n{body}\n\n※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요."
+        if batch:
+            for r in batch:
+                self._reco_history.add(r["food_name"])
+
+            candidates_text = "\n".join(
+                f"- {r['food_name']}: {r.get('description','')}"
+                f"{{f' (태그: {', '.join(r['tags'])})' if r['tags'] else ''}} "
+                for r in batch
+            )
+
+            recommend_prompt = PromptTemplate.from_template(
+                "[현재 음식 분석]\n{analysis}\n\n[후보 목록]\n{candidates}\n\n"
+                "[지시] 후보에서 모두 골라 '이름 - 한 줄 근거'로 제시. "
+                "근거는 후보 설명/태그에서만. 의학적 조언 금지."
+            )
+            body = (recommend_prompt | self.llm | StrOutputParser()).invoke({
+                "analysis": analysis,
+                "candidates": candidates_text
+            })
+        else:
+            body = "추천 후보를 찾지 못했어요. 데이터 범위를 넓히거나 다른 기준으로 시도해볼게요."
+
+        warn_block = ""
+        if blocked:
+            warn_names = ", ".join(r["food_name"] for r in blocked[:5])
+            warn_block = f"\n\n⚠️ 알레르기 때문에 제외된 항목: {warn_names}"
+
+        extra_hint = "\n\n원하시면 '다른 거'라고 말해주시면 새로운 후보를 이어서 보여드릴게요!" + reset_note
+
+        return f"{analysis}\n\n{body}{warn_block}{extra_hint}\n\n※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요."
 
     def _handle_situational_question(self, user_question: str) -> str:
         main_name = (self.current_meal_context or {}).get("food_name")
@@ -447,7 +557,7 @@ class Chatbot:
 
         if not main_docs and not add_docs:
             return ("헬핏 COACH: 관련 정보를 찾지 못했어요. 음식 이름을 정확히 알려주시면 "
-                    "칼로리·영양·성분 관점에서 판단을 도와드릴게요. 😊\n"
+                    "칼로리·영양·성분 관점에서 판단을 도와드릴게요. 😊\n" 
                     "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
 
         def pack(docs): return "\n\n".join(d.page_content for d in docs)
@@ -486,29 +596,29 @@ class Chatbot:
             extraction_prompt = PromptTemplate.from_template(
                 "다음 문장에서 '{main_food}' 외에 추가로 언급된 음식/음료가 있으면 정확히 이름만 하나. 없으면 '없음'.\n문장: {q}"
             )
-            add_try = (extraction_prompt | self.llm | StrOutputParser()).invoke({"main_food": main_food, "q": q}).strip().strip("'\"")
+            add_try = (extraction_prompt | self.llm | StrOutputParser()).invoke({"main_food": main_food, "q": q}).strip().strip("'""")
             if add_try and add_try not in {"없음","없다","none","null"} and add_try in self.FOOD_NAMES and add_try != main_food:
                 return add_try
         return None
 
     def _need_food_first(self) -> str:
         return ("헬핏 COACH: 어떤 음식에 대해 물으시는지 알려주세요! "
-                "예) '갈비탕에 제로콜라 먹어도 될까?'\n"
+                "예) '갈비탕에 제로콜라 먹어도 될까?'\n" 
                 "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
 
     def _handle_goal_planning(self) -> str:
         remaining, exceeded = self._compute_remaining(self.user_profile, self.consumed_today)
-        cand_df = self._select_candidates_by_goal(self.master_df, remaining, scope="meal", top_k=12)
+        cand_df = self._select_candidates_by_goal(self.master_df, remaining, scope="meal", top_k=12, user_profile=self.user_profile)
         if cand_df.empty:
             return ("헬핏 COACH: 남은 목표와 맞는 후보를 찾기 어려워요. "
-                    "칼로리/단백질 목표를 조금 조정하거나, 가벼운 간식부터 채워보는 건 어떨까요? 😊\n"
+                    "칼로리/단백질 목표를 조금 조정하거나, 가벼운 간식부터 채워보는 건 어떨까요? 😊\n" 
                     "※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요.")
         picks = self._greedy_pick_with_limits(cand_df, remaining, max_items=3)
         if not picks: picks = [cand_df.iloc[0]]
 
         lines = []
         total = {"calories":0.0,"protein_g":0.0,"carbs_g":0.0,"fat_g":0.0}
-        for r in picks:
+        for _, r in enumerate(picks):
             cal = float(r.get("calories") or 0)
             p   = float(r.get("protein_g") or 0)
             c   = float(r.get("carbs_g") or 0)
@@ -552,23 +662,48 @@ class Chatbot:
     @staticmethod
     def _compute_remaining(user_profile: dict, consumed_today: dict):
         remaining, exceeded = {}, {}
-        for k, target in user_profile.items():
-            cur = float(consumed_today.get(k, 0) or 0)
-            diff = round(target - cur, 2)
-            if diff < 0:
-                exceeded[k] = -diff; remaining[k] = 0.0
-            else:
-                remaining[k] = diff
+        # Only iterate over numerical keys for computation
+        numerical_keys = ["calories", "protein_g", "fat_g", "carbs_g", "sugars_g", "sodium_mg"]
+        for k in numerical_keys:
+            if k in user_profile: # Ensure the key exists in the user profile
+                target = user_profile[k]
+                cur = float(consumed_today.get(k, 0) or 0)
+                diff = round(target - cur, 2)
+                if diff < 0:
+                    exceeded[k] = -diff; remaining[k] = 0.0
+                else:
+                    remaining[k] = diff
         return remaining, exceeded
 
+    # ### ★ 변경: 기존 함수 유지하되 user_profile 인자 받아 선호/알레르기 반영
     @staticmethod
-    def _select_candidates_by_goal(df: pd.DataFrame, remaining: dict, scope: str = "meal", top_k: int = 12) -> pd.DataFrame:
+    def _select_candidates_by_goal(
+        df: pd.DataFrame,
+        remaining: dict,
+        scope: str = "meal",
+        top_k: int = 12,
+        user_profile: Optional[dict] = None
+    ) -> pd.DataFrame:
         cand = df.copy()
         if scope == "meal" and "unit" in cand.columns:
             cand = cand[cand["unit"].fillna("").ne("ml")]
         for col in ["calories","protein_g","fat_g","carbs_g","sugars_g","sodium_mg"]:
             if col in cand.columns:
                 cand[col] = pd.to_numeric(cand[col], errors="coerce").fillna(0)
+
+        # 알레르기 제외
+        def parse_tags(tags_field):
+            if tags_field is None: return []
+            if isinstance(tags_field, float) and pd.isna(tags_field): return []
+            if isinstance(tags_field, list):
+                raw = tags_field
+            else:
+                s = str(tags_field).strip().strip("[]")
+                raw = [t for t in re.split(r"[,\|/ ]+", s) if t]
+            return [str(t).lower().strip().strip("'""") for t in raw if str(t).strip()]
+
+        allergens = set(str(x).lower().strip() for x in (user_profile or {}).get("allergens", []))
+        cand = cand[cand["tags"].apply(lambda t: len(allergens & set(parse_tags(t))) == 0)].copy()
 
         cal_rem = float(remaining.get("calories", 0) or 0)
         if cal_rem > 0:
@@ -583,7 +718,11 @@ class Chatbot:
         sugar_pen       = cand["sugars_g"].clip(lower=0)
         sodium_over     = (cand["sodium_mg"] - sodium_rem).clip(lower=0)
 
-        score = (3.0 * protein_hit) + (2.0 * protein_density) - (0.6 * sugar_pen) - (0.8 * (sodium_over / 500.0))
+        # 선호 가점
+        prefers = set(str(x).lower().strip() for x in (user_profile or {}).get("prefers", []))
+        pref_bonus = cand["tags"].apply(lambda t: float(len(prefers & set(parse_tags(t)))))
+
+        score = (3.0 * protein_hit) + (2.0 * protein_density) - (0.6 * sugar_pen) - (0.8 * (sodium_over / 500.0)) + (1.2 * pref_bonus)
         cand = cand.assign(_score=score).sort_values("_score", ascending=False)
         return cand.head(top_k).drop(columns=["_score"], errors="ignore")
 
@@ -622,28 +761,52 @@ class Chatbot:
                 row = get_context_row_by_name(self.master_df, fname_inline)
                 if row:
                     self.current_meal_context = row
+                    self._reset_reco_cycle()  # ★ 추가
                 update_ok = False
 
         if update_ok:
             if len(words) == 1 and words[0] in self.FOOD_NAMES:
                 row = get_context_row_by_name(self.master_df, words[0])
-                if row: self.current_meal_context = row
+                if row:
+                    self.current_meal_context = row
+                    self._reset_reco_cycle()  # ★ 추가
             else:
                 # 검색 질의로 컨텍스트 잡기
                 try:
                     docs = self.retriever.invoke(user_input)
                     if docs:
                         self.current_meal_context = docs[0].metadata
+                        self._reset_reco_cycle()  # ★ 추가
                 except Exception:
                     pass
 
         return f"{response}\n\n※ 본 답변은 참고용이며, 의학적 소견이 필요할 경우 전문가와 상의하세요."
 
+    # ★ 변경: 스몰톡 판별기 (룰 + LLM 1/0)
+    def _is_smalltalk(self, text: str) -> bool:
+        # 1) 룰: 화이트리스트
+        if text in NO_CONTEXT_SINGLE_WORDS:
+            return True
+        # 2) 너무 짧은 입력(길이 1~2, 특수문자/이모티콘 위주) 방어
+        if len(text) <= 2 and not find_food_in_text(text, self.FOOD_NAMES):
+            return True
+        # 3) LLM 보조 판별 (애매한 케이스)
+        try:
+            prompt = PromptTemplate.from_template("""
+            다음 문장이 '인사/감사/잡담(스몰톡)'이면 1, 아니면 0만 출력하세요.
+            문장: {q}
+            """.strip())
+            resp = (prompt | self.llm | StrOutputParser()).invoke({"q": text}).strip()
+            return resp == "1"
+        except Exception:
+            # 모델 호출 실패 시엔 안전하게 스몰톡 아님으로 간주(정상 플로우 진행)
+            return False
+
 
 # 선택: 로컬에서 간단 테스트 가능
 if __name__ == "__main__":
     bot = Chatbot()
-    print("헬핏 COACH 준비 완료. 종료하려면 Ctrl+C.")
+    print("헌핏 COACH 준비 완료. 종료하려면 Ctrl+C.")
     while True:
         q = input("You: ").strip()
         print("헬핏:", bot.ask(q))

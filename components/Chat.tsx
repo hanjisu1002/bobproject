@@ -15,6 +15,8 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
+import { loadJSON } from '../lib/storage'; // Import loadJSON
+import { jwtDecode } from 'jwt-decode'; // Import jwtDecode
 
 /* === Types === */
 export type Message = {
@@ -23,6 +25,13 @@ export type Message = {
   text: string;
   createdAt: number;
 };
+
+export interface FoodRecognitionResult {
+  food_name: string;
+  confidence: number;
+  nutrition_info?: { [key: string]: any };
+  serving_size?: number;
+}
 
 type QuickKey = "overview" | "balance" | "pairing" | "planner";
 type ThemeKey = "light" | "glass" | "dark";
@@ -34,27 +43,27 @@ export interface ChatProps {
     text: string,
     ctx: { quick?: QuickKey; menuName?: string; history: Message[] }
   ) => Promise<string> | string;
+  initialFoodRecognition?: FoodRecognitionResult; // New prop
 }
 
 /* === Data === */
 const QUICK_MENUS: Array<{ key: QuickKey; label: string; emoji: string; guide: string }> = [
   { key: "overview", label: "영양 한눈에", emoji: "👀", guide: "칼로리·탄단지·나트륨 핵심만 요약해 드릴게요." },
-  { key: "balance",  label: "균형 플러스", emoji: "⚖️", guide: "함께 먹으면 좋은 영양 균형 기반 반찬/사이드를 추천해 드릴게요." },
-  { key: "pairing",  label: "푸드 페어링", emoji: "🧩", guide: "음료·반찬 조합에 대한 정보를 칼로리 관리 / 영양 균형 / 건강·성분 관점에서 분석해 드릴게요." },
-  { key: "planner",  label: "칼로리 플래너", emoji: "📅", guide: "남은 칼로리에 맞춰 목표를 달성하기 위한 음식을 추천해 드릴게요." },
+  { key: "balance", label: "균형 플러스", emoji: "⚖️", guide: "함께 먹으면 좋은 영양 균형 기반 반찬/사이드를 추천해 드릴게요." },
+  { key: "pairing", label: "푸드 페어링", emoji: "🧩", guide: "음료·반찬 조합에 대한 정보를 칼로리 관리 / 영양 균형 / 건강·성분 관점에서 분석해 드릴게요." },
+  { key: "planner", label: "칼로리 플래너", emoji: "📅", guide: "남은 칼로리에 맞춰 목표를 달성하기 위한 음식을 추천해 드릴게요." },
 ];
 
 const QUICK_TIPS: Record<QuickKey, string> = {
   overview: `\n예) "영양 정보 줘"`,
-  balance:  `\n예) "김치찌개랑 어울리는 메뉴 추천"`,
-  pairing:  `\n예) "갈비탕에 제로콜라 먹어도 될까?"`,
-  planner:  `\n예) "남은 칼로리 맞춰 저녁 추천"`,
+  balance: `\n예) "김치찌개랑 어울리는 메뉴 추천"`,
+  pairing: `\n예) "갈비탕에 제로콜라 먹어도 될까?"`,
+  planner: `\n예) "남은 칼로리 맞춰 저녁 추천"`,
 };
 
 /* === Utils === */
 const niceId = () => Math.random().toString(36).slice(2);
-const envApiBase = () =>
-  (typeof process !== "undefined" && (process as any).env?.EXPO_PUBLIC_API_BASE) || "";
+const envApiBase = () => 'http://localhost:8000/v1';
 
 const welcomeText = (mealName?: string) =>
   `안녕하세요, 헬핏이에요! 😊
@@ -62,6 +71,28 @@ ${mealName ? `${mealName} 드셨군요.` : "만나서 반가워요."} 오늘도 
 
 아래 퀵 메뉴를 누르거나, 편하게 질문해 주세요.
 예) 갈비탕+제로콜라 같이 먹어도 될까? / 오늘 목표 채우려면 저녁 뭐 먹지?`;
+
+interface DecodedToken {
+  sub: string;
+  // Add other properties if needed
+}
+
+const getUserIdFromToken = async (): Promise<string | null> => {
+  const token = await loadJSON<string | null>("token", null);
+  console.log("getUserIdFromToken: Raw token: ", token);
+  if (token) {
+    try {
+      const decoded: DecodedToken = jwtDecode(token);
+      console.log("getUserIdFromToken: Decoded token: ", decoded);
+      return decoded.sub;
+    } catch (error) {
+      console.error("Error decoding token:", error);
+      return null;
+    }
+  }
+  console.log("getUserIdFromToken: No token found.");
+  return null;
+};
 
 /* === UI atoms === */
 function Avatar({ emoji }: { emoji: string }) {
@@ -109,7 +140,7 @@ function Chip({
 }
 
 /* === Main === */
-export default function Chat({ mealName, apiBase, onSend }: ChatProps) {
+export default function Chat({ mealName, apiBase, onSend, initialFoodRecognition }: ChatProps) {
   const router = useRouter();
 
   // 1초 지연 후 환영문 → 이후 퀵칩 순차 등장
@@ -154,17 +185,63 @@ export default function Chat({ mealName, apiBase, onSend }: ChatProps) {
       const r = await onSend(text, { quick, menuName: mealName, history: messages });
       return typeof r === "string" ? r : String(r ?? "");
     }
+
     const base = apiBase || envApiBase();
     if (!base) return demoReply(text, quick);
-    const res = await fetch(`${base.replace(/\/$/, "")}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, quick, menuName: mealName }),
-    });
-    if (!res.ok) throw new Error("LLM 서버 오류");
-    const data = await res.json();
-    return data.text ?? "";
+
+    const userId = await getUserIdFromToken(); // Get user ID
+    const token = await loadJSON<string | null>("token", null); // Load token for Authorization header
+
+    if (!userId || !token) {
+      console.error("User not authenticated. userId or token is null.");
+      throw new Error("User not authenticated. Please log in.");
+    }
+
+    console.log("Chatbot API Call Details:");
+    console.log("  Base URL:", base);
+    console.log("  User ID:", userId);
+
+    const requestBody: any = { // Temporarily use 'any' for flexibility
+      message: text,
+      user_context: {
+        user_id: userId,
+        // Add other user context fields if necessary, e.g., profile, preferences
+      },
+    };
+
+    if (initialFoodRecognition) {
+      requestBody.food_recognition = initialFoodRecognition;
+    }
+
+    console.log("  Request Body:", JSON.stringify(requestBody, null, 2));
+
+    try {
+      const res = await fetch(`${base.replace(/\$/, "")}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`, // Add Authorization header
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        console.error("Chatbot API Response Not OK:");
+        console.error("  Status:", res.status);
+        console.error("  Status Text:", res.statusText);
+        const errorBody = await res.text();
+        console.error("  Response Body:", errorBody);
+        throw new Error(`LLM 서버 오류: ${res.status} ${res.statusText} - ${errorBody}`);
+      }
+
+      const data = await res.json();
+      return data.response ?? "";
+    } catch (error) {
+      console.error("Error during chatbot API call:", error);
+      throw error; // Re-throw to be caught by handleSend
+    }
   };
+
 
   const handleSend = async (text: string, quick?: QuickKey) => {
     const t = text.trim();
@@ -192,8 +269,8 @@ export default function Chat({ mealName, apiBase, onSend }: ChatProps) {
     <LinearGradient
       colors={
         theme === "dark" ? ["#0f1115", "#0b0e13"] :
-        theme === "glass" ? ["#f8fbff", "#f9f3ff"] :
-        ["#ffffff", "#f6f7fb"]
+          theme === "glass" ? ["#f8fbff", "#f9f3ff"] :
+            ["#ffffff", "#f6f7fb"]
       }
       style={{ flex: 1, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden" }}
     >
@@ -229,10 +306,10 @@ export default function Chat({ mealName, apiBase, onSend }: ChatProps) {
         <View style={styles.chatWrap}>
           <FlatList
             ref={listRef}
-            data={[
-              ...messages,
+            data={
+              [...messages,
               ...(loading ? [{ id: "loading", role: "assistant", text: "", createdAt: Date.now() } as Message] : []),
-            ]}
+              ]}
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
               <View style={[styles.row, item.role === "user" ? styles.rowRight : styles.rowLeft]}>

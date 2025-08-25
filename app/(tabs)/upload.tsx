@@ -7,7 +7,8 @@ import { Image, ScrollView, View } from "react-native";
 import { ActivityIndicator, Button, Card, Divider, Text } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import ChatDemo from "../../components/ChatDemo";
+import { useRouter } from "expo-router"; // ← 추가
+// import ChatDemo from "../../components/ChatDemo"; // ← 제거
 import FancyButton from "../../components/FancyButton";
 import Section from "../../components/Section";
 import { apiInfer, InferenceResp } from "../../lib/api";
@@ -28,6 +29,7 @@ type Step = "select" | "recognize";
 
 export default function Upload() {
   const tabBarH = useBottomTabBarHeight();
+  const router = useRouter(); // ← 추가
 
   // 단계/데이터 상태
   const [step, setStep] = useState<Step>("select");
@@ -206,13 +208,19 @@ export default function Upload() {
               </Section>
             )}
 
-            {(selectedNutrition && (evalMsg || suggest)) && (
-              <Section title="대화형 답변 (데모)">
-                <ChatDemo
-                  mealName={selectedNutrition.name ?? "이번 식사"}
-                  score={evalMsg?.score ?? 80}
-                  advice={evalMsg?.advice ?? ["이번 끼니 데이터가 부족하지만 전반적으로 무난해요."]}
-                  suggestions={suggest ?? [{ title: "다음 끼니 가볍게", reason: "데모 기본 제안", items: ["샐러드 + 단백질", "밥 1/2", "소스·당류 줄이기"] }]}
+            {/* LLM 상담으로 이동 버튼 (ChatDemo 제거, mealName만 전달) */}
+            {(res?.nutrition?.[0] && (evalMsg || suggest)) && (
+              <Section title="LLM 상담">
+                <FancyButton
+                  title="헬핏과 대화 시작하기"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(modals)/chat",
+                      params: {
+                        mealName: res!.nutrition[0].name ?? "이번 식사",
+                      },
+                    })
+                  }
                 />
               </Section>
             )}
