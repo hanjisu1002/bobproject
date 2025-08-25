@@ -13,6 +13,7 @@ from app.schemas.menu import MenuWithNutrition
 
 router = APIRouter()
 
+
 @router.post("/vision/recognize-food", response_model=List[MenuWithNutrition])
 async def recognize_food_image(
     file: UploadFile = File(...),
