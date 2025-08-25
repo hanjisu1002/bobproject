@@ -5,7 +5,6 @@ import tempfile
 import os
 from typing import List
 from fastapi.encoders import jsonable_encoder
-from app.main import app  # app.state 사용 목적
 from cv.inference import predict_menu_top3_names
 from app.db.session import get_db
 from app.crud import menu as crud_menu
