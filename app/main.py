@@ -87,7 +87,7 @@ app.include_router(recommend.router, prefix=f"{settings.API_PREFIX}", tags=["rec
 app.include_router(food_log.router, prefix=f"{settings.API_PREFIX}", tags=["food_logs"])
 
 # CV 및 LLM 라우터 (지연 로딩으로 처리)
-app.include_router(recognize.router, prefix=f"{settings.API_PREFIX}", tags=["recognize"])
+app.include_router(vision.router, prefix=f"{settings.API_PREFIX}", tags=["vision"])
 app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}/chatbot", tags=["chatbot"])
 
 # ---------------------------
