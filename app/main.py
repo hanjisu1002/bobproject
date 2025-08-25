@@ -4,7 +4,6 @@ import os
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, vision, food_log, chatbot
 from app.db.session import init_db
@@ -30,7 +29,7 @@ app = FastAPI(title=settings.APP_NAME)
 서버는 allow_credentials=True 가 필요하고,
 allow_origins 에 정확한 오리진(와일드카드 X)을 넣어야 한다.
 """
-ALLOWED_DEFAULT = [
+ALLOWED = [
     "https://yonsei-bob-zip.vercel.app",
     "https://bobproject-gules.vercel.app",
     "http://localhost:8081",
@@ -39,11 +38,11 @@ ALLOWED_DEFAULT = [
 
 if settings.ALLOWED_ORIGINS:
     origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-    for o in ALLOWED_DEFAULT:
+    for o in ALLOWED:
         if o not in origins:
             origins.append(o)
 else:
-    origins = ALLOWED_DEFAULT
+    origins = ALLOWED
 
 
 # (선택) vercel 프리뷰 전체 허용: https://*.vercel.app
@@ -52,11 +51,11 @@ vercel_preview_regex = r"^https://.*\.vercel\.app$"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,                 # 필요하면 * 도 가능 (credentials=False일 때)
-    allow_origin_regex=vercel_preview_regex,  # 프리뷰 전부 허용하고 싶으면 유지
+    # allow_origin_regex=vercel_preview_regex,  # 프리뷰 전부 허용하고 싶으면 유지
     allow_credentials=False,               # <-- 쿠키 안 쓰므로 False
     allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
     allow_headers=["*"],                   # Authorization 포함
-    # expose_headers=["set-cookie"],       # 쿠키 안 쓰면 굳이 노출할 필요 없음 -> 제거
+    expose_headers=["set-cookie"],       # 쿠키 안 쓰면 굳이 노출할 필요 없음 -> 제거
 )
 
 
