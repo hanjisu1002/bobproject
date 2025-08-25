@@ -15,9 +15,8 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-import onnxruntime as ort
-from ultralytics import YOLO
-import torch, open_clip
+# 무거운 라이브러리들은 함수 내부에서 지연 임포트하여
+# 모듈 임포트 시 메모리 사용을 최소화한다.
 
 # --------- 기본 경로 (이 파일의 위치 기준) ---------
 CV_DIR = Path(__file__).parent.resolve()
@@ -39,6 +38,8 @@ def get_yolo_model():
     global _yolo_model
     if _yolo_model is None:
         print("🔄 YOLO 모델 로딩 중...")
+        # 지연 임포트
+        from ultralytics import YOLO
         _yolo_model = YOLO(CV_DIR / "onnx_models" / "best.onnx")
         print("✅ YOLO 모델 로딩 완료")
     return _yolo_model
@@ -55,6 +56,8 @@ def get_clip_model():
     global _clip_model, _clip_tokenizer
     if _clip_model is None:
         print("🔄 CLIP 모델 로딩 중...")
+        # 지연 임포트
+        import open_clip
         _clip_model, _, _clip_tokenizer = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
         print("✅ CLIP 모델 로딩 완료")
     return _clip_model, _clip_tokenizer
@@ -75,8 +78,9 @@ def softmax(x, tau=1.0, axis=-1):
     return ex / np.clip(ex.sum(axis=axis, keepdims=True), 1e-12, None)
 
 
-def load_onnx_session(path: str) -> ort.InferenceSession:
+def load_onnx_session(path: str):
     # ORT 세션 옵션 (메모리 최적화)
+    import onnxruntime as ort
     so = ort.SessionOptions()
     so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC  # 최적화 레벨 낮춤
     so.intra_op_num_threads = 1  # 스레드 수 최소화
