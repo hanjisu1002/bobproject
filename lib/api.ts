@@ -72,10 +72,10 @@ export const recommendAPI = {
     api.get('/recommendations', { params: { kcal_max } }),
 };
 
-// ✅ 챗봇: 최종 경로는 /v1/chat (백엔드 라우터가 /chat로 등록되어 있음)
+// ✅ 챗봇: 최종 경로는 /v1/chatbot/chat (백엔드 라우터가 /chatbot/chat로 등록되어 있음)
 export const chatbotAPI = {
   chat: (message: string, user_id: string) =>
-    api.post('/chat', { message, user_context: { user_id } }),
+    api.post('/chatbot/chat', { message, user_context: { user_id } }),
 };
 
 // ✅ 이미지 인식: 멀티파트 업로드 → 서버의 List[MenuWithNutrition]를 화면 타입으로 변환

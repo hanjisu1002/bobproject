@@ -216,7 +216,7 @@ export default function Chat({ mealName, apiBase, onSend, initialFoodRecognition
     console.log("  Request Body:", JSON.stringify(requestBody, null, 2));
 
     try {
-      const res = await fetch(`${base.replace(/\$/, "")}/chat`, {
+      const res = await fetch(`${base.replace(/\/$/, "")}/chatbot/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
