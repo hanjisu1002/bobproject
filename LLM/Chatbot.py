@@ -213,7 +213,7 @@ class Chatbot:
             self._llm = ChatGoogleGenerativeAI(
                 model=self._model_name, 
                 temperature=self._temperature,
-                max_output_tokens=128,  # 토큰 수 더욱 제한 (256 → 128)
+                max_output_tokens=256,  # 토큰 수 더욱 제한 (256 → 128)
                 max_retries=1,  # 재시도 횟수 최소화
                 convert_system_message_to_human=True  # SystemMessage 호환성 해결
             )
