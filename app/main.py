@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Response 
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routers import health, auth, me, menu, recommend, vision, food_log, chatbot
@@ -18,8 +18,8 @@ log = logging.getLogger("app")
 
 # Render가 주는 포트 (로컬 기본 8000)
 PORT = int(os.environ.get("PORT", 8000))
-
 app = FastAPI(title=settings.APP_NAME)
+
 
 # ---------------------------
 # CORS
@@ -58,6 +58,18 @@ app.add_middleware(
     expose_headers=["set-cookie"],       # 쿠키 안 쓰면 굳이 노출할 필요 없음 -> 제거
 )
 
+# --- 루트/헬스체크 (HEAD 허용) ---
+@app.get("/", include_in_schema=False)
+def root():
+    return {"ok": True, "service": "smartbite-api"}
+
+@app.head("/", include_in_schema=False)
+def root_head():
+    return Response(status_code=200)
+
+@app.get("/ping", include_in_schema=False)
+def ping():
+    return {"ok": True}
 
 # ---------------------------
 # 스타트업: DB 초기화 (재시도 포함) - 메모리 최적화
@@ -110,8 +122,8 @@ app.include_router(chatbot.router, prefix=f"{settings.API_PREFIX}/chatbot", tags
 # ---------------------------
 from fastapi.responses import HTMLResponse
 
-@app.get("/", response_class=HTMLResponse)
-def index():
+@app.get("/quicktest", response_class=HTMLResponse, include_in_schema=False)
+def quicktest():
     return """
 <!doctype html>
 <html lang="ko">

@@ -62,4 +62,4 @@ services:
         value: "400"  # Python 메모리 사용량 제한 (MB)
       - key: MAX_WORKERS
         value: "1"  # 워커 수 제한
-    healthCheckPath: /health
+    healthCheckPath: /
