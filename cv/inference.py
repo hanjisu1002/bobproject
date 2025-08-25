@@ -176,6 +176,7 @@ def build_clip_text_feat(class_names: List[str], device='cpu',
                          clip_model='ViT-B-32',
                          pretrained='laion2b_s34b_b79k',
                          use_text_ensemble: bool = True) -> tuple:
+    import open_clip, torch
     model, _, preprocess = open_clip.create_model_and_transforms(
         clip_model, pretrained=pretrained, device=device
     )
@@ -194,6 +195,7 @@ def build_clip_text_feat(class_names: List[str], device='cpu',
 
 
 def clip_logits_for_crop(model, preprocess, text_feat, crop_pil, device='cpu') -> np.ndarray:
+    import torch
     with torch.no_grad():
         img = preprocess(crop_pil).unsqueeze(0).to(device)
         img_feat = model.encode_image(img)
@@ -250,6 +252,7 @@ def build_or_load_clip(class_names: List[str], cfg) -> tuple:
                 return model, preprocess, text_feat_t, dev, True
         except Exception:
             pass
+    import torch  # torch.from_numpy 사용
     model, preprocess, text_feat_t = build_clip_text_feat(
         class_names, device=dev,
         clip_model=cfg.clip_model,
@@ -315,6 +318,8 @@ class InferenceRunner:
         """YOLO 감지 모델을 필요할 때 로드합니다."""
         if self.det_model is None:
             print("🔄 YOLO 감지 모델 로딩 중...")
+            # 지연 임포트 (여기서만 import 해서 'YOLO is not defined' 방지)
+            from ultralytics import YOLO
             self.det_model = YOLO(self.cfg.det_onnx, task="detect")
             print("✅ YOLO 감지 모델 로딩 완료")
 
@@ -563,17 +568,7 @@ def predict_menu_top3(image_path: str) -> dict:
             ]
         }
 
-def predict_menu_top3_names(image_path: str) -> List[str]:
-    """
-    간단한 이름만 반환하는 함수 (메모리 절약)
-    """
-    try:
-        result = predict_menu_top3(image_path)
-        return [item["label"] for item in result["flat_topk"]]
-    except Exception as e:
-        print(f"❌ CV 이름 추출 실패: {e}")
-        return ["음식", "식사", "요리"]
-        
+
 
 
 def predict_menu_top3_per_box(image_path: str) -> List[List[str]]:
