@@ -13,9 +13,25 @@ import sys
 import os
 from pathlib import Path
 
-# LLM 디렉토리를 Python 경로에 추가 (절대경로로 안전하게)
-LLM_DIR = Path(__file__).resolve().parents[2] / "LLM"
-sys.path.append(str(LLM_DIR))
+
+# ✅ LLM 디렉토리 위치를 유연하게 탐색: /app/LLM 또는 레포 루트 /LLM
+_P = Path(__file__).resolve()
+CANDIDATES = [
+    _P.parents[2] / "LLM",   # /app/LLM
+    _P.parents[3] / "LLM",   # /LLM (레포 루트)
+    Path.cwd() / "LLM",      # 현재 작업 디렉토리 기준
+]
+LLM_DIR = next((p for p in CANDIDATES if p.exists()), CANDIDATES[1])
+
+# from LLM.Chatbot import Chatbot 형태를 위해 '부모'를 sys.path에 추가
+if str(LLM_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(LLM_DIR.parent))
+
+# (디버그) 실제 참조 경로/파일 존재 여부 로그
+print(f"[LLM_DIR] => {LLM_DIR.resolve()}")
+for _f in ["food_data_description.csv", "drink.csv", "sidedish.csv"]:
+    _p = LLM_DIR / _f
+    print(f"[CHECK] {_p} exists={_p.exists()}")
 
 # 전역 챗봇 인스턴스
 _chatbot = None

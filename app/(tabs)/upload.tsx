@@ -213,17 +213,25 @@ export default function Upload() {
               <Section title="LLM 상담">
                 <FancyButton
                   title="헬핏과 대화 시작하기"
-                  onPress={() =>
+                  onPress={() => {
+                    const picked = res!.nutrition[selectedIndex] ?? res!.nutrition[0];
                     router.push({
                       pathname: "/(modals)/chat",
                       params: {
-                        mealName: res!.nutrition[0].name ?? "이번 식사",
+                        mealName: picked.name ?? "이번 식사",
+                        fr: encodeURIComponent(JSON.stringify({
+                          food_name: picked.name,
+                          confidence: 1,
+                          nutrition_info: picked,
+                          serving_size: picked?.serving_g,
+                        })),
                       },
-                    })
-                  }
+                    });
+                  }}
                 />
               </Section>
             )}
+
           </>
         )}
       </ScrollView>

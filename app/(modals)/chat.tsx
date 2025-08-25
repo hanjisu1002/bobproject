@@ -1,11 +1,23 @@
 // app/(modals)/chat.tsx
 import { View, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import Chat from "@/components/Chat";
+import Chat, { type FoodRecognitionResult } from "@/components/Chat";
 
 export default function ChatModal() {
   const router = useRouter();
-  const { mealName } = useLocalSearchParams<{ mealName?: string }>();
+  const params = useLocalSearchParams<{ mealName?: string; fr?: string | string[] }>();
+  const mealName = (Array.isArray(params.mealName) ? params.mealName[0] : params.mealName) ?? "이번 식사";
+
+  // fr 파라미터(문자열) → 객체로 복원
+  let initialFoodRecognition: FoodRecognitionResult | undefined;
+  const frParam = Array.isArray(params.fr) ? params.fr[0] : params.fr;
+  if (frParam) {
+    try {
+        initialFoodRecognition = JSON.parse(decodeURIComponent(frParam)) as FoodRecognitionResult;
+    } catch (e) {
+        console.warn("Failed to parse FR param:", e);
+    }
+  }
 
   return (
     // 반투명 오버레이(뒤 화면 비침)
@@ -22,7 +34,7 @@ export default function ChatModal() {
           backgroundColor: "transparent",
         }}
       >
-        <Chat mealName={mealName ?? "이번 식사"} />
+        <Chat mealName={mealName} initialFoodRecognition={initialFoodRecognition} />
       </View>
     </View>
   );
